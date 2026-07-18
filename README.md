@@ -1,4 +1,4 @@
-# NukeAV1 🚀
+﻿# NukeAV 🚀
 
 [![Ko-Fi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/anarchbyte)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/anarchbyte)
@@ -76,26 +76,26 @@ cargo build --release
 
 ### Windows
 Copy the output binary file:
-- Source path: `target/release/NukeAV1.dll`
+- Source path: `target/release/NukeAV.dll`
 - Target path:
 ```
-C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\NukeAV1.prm
+C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\NukeAV.prm
 ```
 
 ### macOS
 Create the plugin bundle folder structure:
-- Source path: `target/release/libNukeAV1.dylib`
+- Source path: `target/release/libNukeAV.dylib`
 - Target bundle structure:
 ```
-NukeAV1.bundle/
+NukeAV.bundle/
   Contents/
     Info.plist
     MacOS/
-      NukeAV1  (copied from libNukeAV1.dylib)
+      NukeAV  (copied from libNukeAV.dylib)
 ```
-Copy `NukeAV1.bundle` to:
+Copy `NukeAV.bundle` to:
 ```
-/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/NukeAV1.bundle
+/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/NukeAV.bundle
 ```
 
 Restart Adobe Premiere Pro to load the new plugin.
