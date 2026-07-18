@@ -1,4 +1,4 @@
-use std::ffi::{c_void, CString};
+﻿use std::ffi::{c_void, CString};
 use std::ptr;
 use crate::*;
 use crate::ffmpeg_ffi::*;
@@ -23,16 +23,14 @@ pub unsafe extern "C" fn get_format(
     let mut i = 0;
     while *pix_fmts.add(i) != AV_PIX_FMT_NONE {
         let fmt = *pix_fmts.add(i);
-        if fmt == AV_PIX_FMT_D3D11 
+        if (fmt == AV_PIX_FMT_D3D11 
             || fmt == AV_PIX_FMT_D3D11VA_VLD 
             || fmt == AV_PIX_FMT_DXVA2_VLD 
-            || fmt == AV_PIX_FMT_CUDA 
-        {
-            if !(*ctx).hw_device_ctx.is_null() {
+            || fmt == AV_PIX_FMT_CUDA)
+            && !(*ctx).hw_device_ctx.is_null() {
                 crate::log_debug!("get_format: SELECTED HW FORMAT = {}", fmt);
                 return fmt;
             }
-        }
         i += 1;
     }
     *pix_fmts
@@ -45,7 +43,7 @@ pub unsafe fn handle_open_file8(std_parms: *mut imStdParms, param1: *mut c_void,
         return malUnknownError as prMALError;
     }
     let file_open = &mut *file_open;
-    let file_info = &(*file_open).fileinfo;
+    let file_info = &file_open.fileinfo;
 
     let path_str = get_utf16_string(file_info.filepath);
     let path_c = CString::new(path_str.clone()).unwrap();
@@ -209,12 +207,11 @@ pub unsafe fn handle_open_file8(std_parms: *mut imStdParms, param1: *mut c_void,
                             0,
                             ptr::null_mut()
                         );
-                        if err < 0 || swr_ctx.is_null() || swr_init(swr_ctx) < 0 {
-                            if !swr_ctx.is_null() {
+                        if (err < 0 || swr_ctx.is_null() || swr_init(swr_ctx) < 0)
+                            && !swr_ctx.is_null() {
                                 swr_free(&mut swr_ctx);
                                 swr_ctx = ptr::null_mut();
                             }
-                        }
                         
                         audio_buffer = vec![Vec::new(); channels as usize];
                     } else {

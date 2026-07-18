@@ -1,6 +1,6 @@
-#![allow(dead_code)]
+﻿#![allow(dead_code)]
 #![allow(unsafe_op_in_unsafe_fn)]
-// NukeAV1 lib name is mandated by Adobe Premiere Pro plugin format (.prm/.dll must match)
+// NukeAV lib name is mandated by Adobe Premiere Pro plugin format (.prm/.dll must match)
 #![allow(non_snake_case)]
 
 pub mod ffi;
@@ -16,7 +16,7 @@ macro_rules! log_debug {
         if let Ok(mut file) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(std::env::temp_dir().join("NukeAV1_debug.log"))
+            .open(std::env::temp_dir().join("NukeAV_debug.log"))
         {
             use std::io::Write;
             let _ = writeln!(file, $($arg)*);
@@ -32,6 +32,9 @@ pub use crate::plugin::exporter;
 pub use crate::utils::{str_to_utf16, leak_utf16};
 
 /// Main entry point for IMPORTER (AV1/VP9 reading)
+///
+/// # Safety
+/// The host (Premiere Pro) must ensure that the pointers passed are valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn xImportEntry(
     selector: c_int,
@@ -51,6 +54,9 @@ pub unsafe extern "C" fn xImportEntry(
 }
 
 /// Entry point for exporter module (AV1/VP8/VP9 encoding)
+///
+/// # Safety
+/// The host (Premiere Pro) must ensure that the pointers passed are valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn xSDKExport(
     selector: c_int,

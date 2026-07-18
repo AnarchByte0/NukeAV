@@ -1,4 +1,4 @@
-pub mod importer;
+﻿pub mod importer;
 pub mod exporter;
 
 pub use exporter::UIBuilder;
@@ -17,13 +17,15 @@ pub fn copy_c_str(src: &str, dst: &mut [c_char]) {
         ptr::copy_nonoverlapping(bytes.as_ptr() as *const c_char, dst.as_mut_ptr(), len);
         if len < dst.len() {
             dst[len] = 0;
-        } else if dst.len() > 0 {
+        } else if !dst.is_empty() {
             dst[dst.len() - 1] = 0;
         }
     }
 }
 
 /// Convert a null-terminated UTF-16 pointer into a Rust String
+/// # Safety
+/// The caller must ensure that `ptr` points to a valid null-terminated UTF-16 string.
 pub unsafe fn get_utf16_string(ptr: *const prUTF16Char) -> String {
     let mut len = 0;
     while *ptr.add(len) != 0 {
@@ -34,6 +36,8 @@ pub unsafe fn get_utf16_string(ptr: *const prUTF16Char) -> String {
 }
 
 /// Copy a Rust string slice into a fixed-size Adobe UTF-16 buffer
+/// # Safety
+/// The caller must ensure that `out` points to an allocated buffer of at least `max_len` UTF-16 characters.
 pub unsafe fn str_to_utf16(s: &str, out: *mut prUTF16Char, max_len: usize) {
     let mut i = 0;
     for c in s.encode_utf16() {

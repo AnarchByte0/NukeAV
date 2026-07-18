@@ -1,4 +1,4 @@
-use std::ffi::c_void;
+﻿use std::ffi::c_void;
 use std::os::raw::c_char;
 use crate::*;
 
@@ -15,7 +15,7 @@ fn log_debug(msg: &str) {
         if let Ok(mut file) = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(std::env::temp_dir().join("NukeAV1_debug.log"))
+            .open(std::env::temp_dir().join("NukeAV_debug.log"))
         {
             let _ = writeln!(file, "[{:.4}] {}", time, msg);
         }

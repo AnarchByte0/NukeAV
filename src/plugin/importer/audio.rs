@@ -1,4 +1,4 @@
-use std::ffi::c_void;
+﻿use std::ffi::c_void;
 use std::ptr;
 use crate::*;
 use crate::ffmpeg_ffi::*;
@@ -77,8 +77,8 @@ pub unsafe fn handle_import_audio(param1: *mut c_void, param2: *mut c_void) -> p
             break;
         }
 
-        if (*ffmpeg.packet).stream_index == importer_data.audio_stream_idx {
-            if avcodec_send_packet(ffmpeg.audio_codec_ctx, ffmpeg.packet) == 0 {
+        if (*ffmpeg.packet).stream_index == importer_data.audio_stream_idx
+            && avcodec_send_packet(ffmpeg.audio_codec_ctx, ffmpeg.packet) == 0 {
                 while avcodec_receive_frame(ffmpeg.audio_codec_ctx, ffmpeg.audio_frame) == 0 {
                     let frame = ffmpeg.audio_frame;
 
@@ -140,7 +140,6 @@ pub unsafe fn handle_import_audio(param1: *mut c_void, param2: *mut c_void) -> p
                     }
                 }
             }
-        }
         av_packet_unref(ffmpeg.packet);
     }
 

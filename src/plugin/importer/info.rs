@@ -1,4 +1,4 @@
-use std::ffi::{c_void, CString};
+﻿use std::ffi::{c_void, CString};
 use std::ptr;
 use crate::*;
 use crate::ffmpeg_ffi::*;
@@ -34,8 +34,8 @@ pub unsafe fn handle_get_info8(_std_parms: *mut crate::imStdParms, param1: *mut 
     let path_str = get_utf16_string(file_access.filepath);
 
     let cache = METADATA_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Ok(guard) = cache.lock() {
-        if let Some(cached) = guard.get(&path_str) {
+    if let Ok(guard) = cache.lock()
+        && let Some(cached) = guard.get(&path_str) {
             crate::log_debug!("handle_get_info8: METADATA CACHE HIT for {}", path_str);
             file_info.hasVideo = 1;
             file_info.vidInfo.imageWidth = cached.width;
@@ -52,12 +52,11 @@ pub unsafe fn handle_get_info8(_std_parms: *mut crate::imStdParms, param1: *mut 
             } else {
                 file_info.audDuration = 0;
             }
-            file_info.accessModes = kRandomAccessImport as i32;
+            file_info.accessModes = kRandomAccessImport;
             file_info.vidInfo.supportsAsyncIO = 1;
             file_info.vidInfo.supportsGetSourceVideo = 1;
             return malNoError as prMALError;
         }
-    }
 
     let path_c = CString::new(path_str.clone()).unwrap();
 
@@ -174,7 +173,7 @@ pub unsafe fn handle_get_info8(_std_parms: *mut crate::imStdParms, param1: *mut 
         file_info.audDuration = 0;
     }
 
-    file_info.accessModes = kRandomAccessImport as i32;
+    file_info.accessModes = kRandomAccessImport;
     file_info.vidInfo.supportsAsyncIO = 1;
     file_info.vidInfo.supportsGetSourceVideo = 1;
 

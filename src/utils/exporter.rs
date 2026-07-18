@@ -1,4 +1,4 @@
-#![allow(non_upper_case_globals)]
+﻿#![allow(non_upper_case_globals)]
 #![allow(non_snake_case)]
 #![allow(unused)]
 
@@ -58,7 +58,7 @@ impl<'a> UIBuilder<'a> {
                 param_info.structVersion = 1;
                 
                 let id_len = param_id.len().min(255);
-                for i in 0..id_len { param_info.identifier[i] = param_id[i] as c_char; }
+                for (i, &b) in param_id.iter().enumerate().take(id_len) { param_info.identifier[i] = b as c_char; }
                 param_info.identifier[id_len] = 0;
 
                 let name_ptr = core::ptr::addr_of_mut!(param_info.name) as *mut prUTF16Char;
@@ -85,7 +85,7 @@ impl<'a> UIBuilder<'a> {
                 param_info.structVersion = 1;
                 
                 let id_len = param_id.len().min(255);
-                for i in 0..id_len { param_info.identifier[i] = param_id[i] as c_char; }
+                for (i, &b) in param_id.iter().enumerate().take(id_len) { param_info.identifier[i] = b as c_char; }
                 param_info.identifier[id_len] = 0;
 
                 let name_ptr = core::ptr::addr_of_mut!(param_info.name) as *mut prUTF16Char;
@@ -115,7 +115,7 @@ impl<'a> UIBuilder<'a> {
                 param_info.structVersion = 1;
                 
                 let id_len = param_id.len().min(255);
-                for i in 0..id_len { param_info.identifier[i] = param_id[i] as c_char; }
+                for (i, &b) in param_id.iter().enumerate().take(id_len) { param_info.identifier[i] = b as c_char; }
                 param_info.identifier[id_len] = 0;
 
                 let name_ptr = core::ptr::addr_of_mut!(param_info.name) as *mut prUTF16Char;
@@ -145,7 +145,7 @@ impl<'a> UIBuilder<'a> {
                 param_info.structVersion = 1;
                 
                 let id_len = param_id.len().min(255);
-                for i in 0..id_len { param_info.identifier[i] = param_id[i] as c_char; }
+                for (i, &b) in param_id.iter().enumerate().take(id_len) { param_info.identifier[i] = b as c_char; }
                 param_info.identifier[id_len] = 0;
 
                 let name_ptr = core::ptr::addr_of_mut!(param_info.name) as *mut prUTF16Char;
@@ -178,7 +178,7 @@ impl<'a> UIBuilder<'a> {
                 param_info.structVersion = 1;
                 
                 let id_len = param_id.len().min(255);
-                for i in 0..id_len { param_info.identifier[i] = param_id[i] as c_char; }
+                for (i, &b) in param_id.iter().enumerate().take(id_len) { param_info.identifier[i] = b as c_char; }
                 param_info.identifier[id_len] = 0;
 
                 let name_ptr = core::ptr::addr_of_mut!(param_info.name) as *mut prUTF16Char;
@@ -208,7 +208,7 @@ impl<'a> UIBuilder<'a> {
                 param_info.structVersion = 1;
                 
                 let id_len = param_id.len().min(255);
-                for i in 0..id_len { param_info.identifier[i] = param_id[i] as c_char; }
+                for (i, &b) in param_id.iter().enumerate().take(id_len) { param_info.identifier[i] = b as c_char; }
                 param_info.identifier[id_len] = 0;
 
                 let name_ptr = core::ptr::addr_of_mut!(param_info.name) as *mut prUTF16Char;
@@ -289,7 +289,7 @@ impl<'a> UIBuilder<'a> {
                 param_info.structVersion = 1;
                 
                 let id_len = param_id.len().min(255);
-                for i in 0..id_len { param_info.identifier[i] = param_id[i] as c_char; }
+                for (i, &b) in param_id.iter().enumerate().take(id_len) { param_info.identifier[i] = b as c_char; }
                 param_info.identifier[id_len] = 0;
 
                 let name_ptr = core::ptr::addr_of_mut!(param_info.name) as *mut prUTF16Char;
@@ -317,7 +317,7 @@ impl<'a> UIBuilder<'a> {
                 param_info.structVersion = 1;
                 
                 let id_len = param_id.len().min(255);
-                for i in 0..id_len { param_info.identifier[i] = param_id[i] as c_char; }
+                for (i, &b) in param_id.iter().enumerate().take(id_len) { param_info.identifier[i] = b as c_char; }
                 param_info.identifier[id_len] = 0;
 
                 let name_ptr = core::ptr::addr_of_mut!(param_info.name) as *mut prUTF16Char;
@@ -362,7 +362,7 @@ impl<'a> UIBuilder<'a> {
                 param_info.structVersion = 1;
                 
                 let id_len = param_id.len().min(255);
-                for i in 0..id_len { param_info.identifier[i] = param_id[i] as c_char; }
+                for (i, &b) in param_id.iter().enumerate().take(id_len) { param_info.identifier[i] = b as c_char; }
                 param_info.identifier[id_len] = 0;
 
                 let name_ptr = core::ptr::addr_of_mut!(param_info.name) as *mut prUTF16Char;

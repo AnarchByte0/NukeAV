@@ -9,7 +9,7 @@ fn hack_portfile(vcpkg_dir: &Path) {
     
     // Always start with a clean portfile from git
     let _ = Command::new("git")
-        .args(&["checkout", "--", "ports/ffmpeg/portfile.cmake"])
+        .args(["checkout", "--", "ports/ffmpeg/portfile.cmake"])
         .current_dir(vcpkg_dir)
         .status();
 
@@ -40,10 +40,8 @@ fn run_command_streaming(cmd_program: &Path, cmd_args: &[&str], current_dir: &Pa
 
     if let Some(stdout) = child.stdout.take() {
         let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            if let Ok(l) = line {
-                println!("cargo:warning={}", l);
-            }
+        for l in reader.lines().flatten() {
+            println!("cargo:warning={}", l);
         }
     }
 
@@ -107,13 +105,13 @@ fn main() {
         println!("cargo:warning=Cloning vcpkg and compiling FFmpeg from source. This will take 15-40 minutes!");
         
         let status = Command::new("git")
-            .args(&["clone", "https://github.com/microsoft/vcpkg.git", vcpkg_dir.to_str().unwrap()])
+            .args(["clone", "https://github.com/microsoft/vcpkg.git", vcpkg_dir.to_str().unwrap()])
             .status().unwrap();
         if !status.success() { panic!("Failed to clone vcpkg"); }
 
         let bootstrap_status = if target_os == "windows" {
             Command::new("cmd")
-                .args(&["/C", "bootstrap-vcpkg.bat"])
+                .args(["/C", "bootstrap-vcpkg.bat"])
                 .current_dir(&vcpkg_dir)
                 .status().unwrap()
         } else {
@@ -149,12 +147,12 @@ fn main() {
         println!("cargo:warning=Checking for FFmpeg updates in vcpkg...");
         
         let _ = Command::new("git")
-            .args(&["checkout", "--", "ports/ffmpeg/portfile.cmake"])
+            .args(["checkout", "--", "ports/ffmpeg/portfile.cmake"])
             .current_dir(&vcpkg_dir)
             .status();
 
         let pull_status = Command::new("git")
-            .args(&["pull"])
+            .args(["pull"])
             .current_dir(&vcpkg_dir)
             .status().unwrap();
 

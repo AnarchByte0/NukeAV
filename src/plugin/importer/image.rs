@@ -1,4 +1,4 @@
-use std::ffi::c_void;
+﻿use std::ffi::c_void;
 use std::ptr;
 use crate::*;
 use crate::ffmpeg_ffi::*;
@@ -291,7 +291,7 @@ pub unsafe fn handle_import_image(param1: *mut c_void, param2: *mut c_void) -> p
             let row_elements = (import_image.dstWidth * 4) as usize;
             let dest_start = temp_buf.as_mut_ptr().add((import_image.dstHeight - 1) as usize * row_elements);
             let mut dest_data: [*mut u8; 4] = [dest_start as *mut u8, ptr::null_mut(), ptr::null_mut(), ptr::null_mut()];
-            let mut dest_linesize: [i32; 4] = [-(import_image.dstWidth * 8) as i32, 0, 0, 0];
+            let mut dest_linesize: [i32; 4] = [(-(import_image.dstWidth * 8)), 0, 0, 0];
             
             sws_scale(
                 sws_ctx,
@@ -332,7 +332,7 @@ pub unsafe fn handle_import_image(param1: *mut c_void, param2: *mut c_void) -> p
             let row_elements = (import_image.dstWidth * 4) as usize;
             let dest_start = temp_buf.as_mut_ptr().add((import_image.dstHeight - 1) as usize * row_elements);
             let mut dest_data: [*mut u8; 4] = [dest_start as *mut u8, ptr::null_mut(), ptr::null_mut(), ptr::null_mut()];
-            let mut dest_linesize: [i32; 4] = [-(import_image.dstWidth * 8) as i32, 0, 0, 0];
+            let mut dest_linesize: [i32; 4] = [(-(import_image.dstWidth * 8)), 0, 0, 0];
             
             sws_scale(
                 sws_ctx,

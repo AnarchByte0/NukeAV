@@ -1,4 +1,4 @@
-/// Convert BGRA64 buffer to f32 (normalized 0.0 to 1.0)
+﻿/// Convert BGRA64 buffer to f32 (normalized 0.0 to 1.0)
 #[inline]
 pub fn bgra64_to_f32(src: &[u16], dst: &mut [f32]) {
     let len = src.len().min(dst.len());

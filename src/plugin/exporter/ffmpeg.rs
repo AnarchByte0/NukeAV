@@ -1,4 +1,4 @@
-use crate::ffmpeg_ffi::*;
+﻿use crate::ffmpeg_ffi::*;
 use std::ffi::CString;
 use std::ptr;
 

@@ -1,4 +1,4 @@
-use crate::ffmpeg_ffi::*;
+﻿use crate::ffmpeg_ffi::*;
 use std::sync::{Arc, Mutex, Condvar};
 use std::sync::mpsc::Sender;
 use std::collections::HashSet;

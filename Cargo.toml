@@ -1,23 +1,23 @@
-[package]
-name = "NukeAV1"
-version = "1.2.1"
+﻿[package]
+name = "NukeAV"
+version = "2.0.0"
 edition = "2024"
 build = "build.rs"
 
 [lib]
-name = "NukeAV1"
+name = "NukeAV"
 crate-type = ["cdylib"]
 
 [dependencies]
-symphonia = { version = "0.5", features = ["all"] }
+symphonia = { version = "0.6", features = ["all"] }
 mp4 = "0.14"
 webm-iterable = "0.6"
 
-yuv = "0.1"
+yuv = "0.8"
 libc = "0.2"
 
 [build-dependencies]
-bindgen = "0.70"
+bindgen = "0.72"
 cc = "1.2"
 vcpkg = "0.2.15"
 zip = "8.6.0"

@@ -1,8 +1,9 @@
-use std::path::PathBuf;
+﻿use std::path::PathBuf;
 
 #[cfg(target_os = "windows")]
 #[repr(C)]
 #[allow(non_snake_case)]
+#[allow(clippy::upper_case_acronyms)]
 struct MEMORYSTATUSEX {
     dwLength: u32,
     dwMemoryLoad: u32,
@@ -157,7 +158,7 @@ pub fn should_avoid_audio_conform() -> bool {
         None => return false,
     };
     
-    let dir = PathBuf::from(appdata_val).join("NukeAV1");
+    let dir = PathBuf::from(appdata_val).join("NukeAV");
     if !dir.exists() {
         let _ = std::fs::create_dir_all(&dir);
     }
@@ -165,7 +166,7 @@ pub fn should_avoid_audio_conform() -> bool {
     if !path.exists() {
         let _ = std::fs::write(
             &path,
-            "# NukeAV1 Importer Configuration\n\
+            "# NukeAV Importer Configuration\n\
              # Set to true/false to override, or auto to follow Adobe preferences:\n\
              # - If 'Save Media Cache files next to originals' is enabled in Adobe, we disable audio cache to avoid folder clutter.\n\
              # - If disabled in Adobe, we enable audio cache for better performance since it goes to a centralized directory.\n\

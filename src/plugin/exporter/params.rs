@@ -1,4 +1,4 @@
-use std::ffi::c_void;
+﻿use std::ffi::c_void;
 use crate::*;
 
 pub unsafe fn handle_generate_default_params(std_parms: *mut exportStdParms, param1: *mut c_void) -> prMALError {
