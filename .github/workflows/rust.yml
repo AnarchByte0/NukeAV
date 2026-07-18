@@ -1,4 +1,4 @@
-name: Rust CI & Release Build
+﻿name: Rust CI & Release Build
 
 on:
   push:
@@ -72,14 +72,14 @@ jobs:
       shell: bash
       run: |
         mkdir -p output
-        cp target/release/NukeAV1.dll output/NukeAV1.prm
-        echo "Artifact prepared at output/NukeAV1.prm"
+        cp target/release/NukeAV.dll output/NukeAV.prm
+        echo "Artifact prepared at output/NukeAV.prm"
 
     - name: Upload Windows Build Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: NukeAV1-Windows-Artifact
-        path: output/NukeAV1.prm
+        name: NukeAV-Windows-Artifact
+        path: output/NukeAV.prm
         compression-level: 0
         if-no-files-found: error
 
@@ -148,13 +148,13 @@ jobs:
       shell: bash
       run: |
         VERSION="${{ steps.get_version.outputs.version }}"
-        mkdir -p output/NukeAV1.bundle/Contents/MacOS
+        mkdir -p output/NukeAV.bundle/Contents/MacOS
 
         # Copy compiled dynamic library as the bundle executable
-        cp target/release/libNukeAV1.dylib output/NukeAV1.bundle/Contents/MacOS/NukeAV1
+        cp target/release/libNukeAV.dylib output/NukeAV.bundle/Contents/MacOS/NukeAV
 
         # Generate Info.plist dynamically
-        cat <<EOF > output/NukeAV1.bundle/Contents/Info.plist
+        cat <<EOF > output/NukeAV.bundle/Contents/Info.plist
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
         <plist version="1.0">
@@ -162,13 +162,13 @@ jobs:
             <key>CFBundleDevelopmentRegion</key>
             <string>English</string>
             <key>CFBundleExecutable</key>
-            <string>NukeAV1</string>
+            <string>NukeAV</string>
             <key>CFBundleIdentifier</key>
-            <string>com.anarchbyte.nukeav1</string>
+            <string>com.anarchbyte.NukeAV</string>
             <key>CFBundleInfoDictionaryVersion</key>
             <string>6.0</string>
             <key>CFBundleName</key>
-            <string>NukeAV1</string>
+            <string>NukeAV</string>
             <key>CFBundlePackageType</key>
             <string>Bndl</string>
             <key>CFBundleSignature</key>
@@ -178,18 +178,18 @@ jobs:
         </dict>
         </plist>
         EOF
-        echo "macOS Bundle prepared at output/NukeAV1.bundle"
+        echo "macOS Bundle prepared at output/NukeAV.bundle"
 
         # Zip the bundle so it uploads as a single file asset
         cd output
-        zip -r NukeAV1-macOS.zip NukeAV1.bundle
-        echo "Zipped bundle at output/NukeAV1-macOS.zip"
+        zip -r NukeAV-macOS.zip NukeAV.bundle
+        echo "Zipped bundle at output/NukeAV-macOS.zip"
 
     - name: Upload macOS Build Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: NukeAV1-macOS-Artifact
-        path: output/NukeAV1-macOS.zip
+        name: NukeAV-macOS-Artifact
+        path: output/NukeAV-macOS.zip
         compression-level: 0
         if-no-files-found: error
 
@@ -217,31 +217,31 @@ jobs:
     - name: Download Windows artifact
       uses: actions/download-artifact@v4
       with:
-        name: NukeAV1-Windows-Artifact
+        name: NukeAV-Windows-Artifact
         path: release-assets/windows
 
     - name: Download macOS artifact
       uses: actions/download-artifact@v4
       with:
-        name: NukeAV1-macOS-Artifact
+        name: NukeAV-macOS-Artifact
         path: release-assets/macos
 
     - name: Rename assets for release
       run: |
         VERSION="${{ steps.get_version.outputs.version }}"
-        mv release-assets/windows/NukeAV1.prm        release-assets/NukeAV1-${VERSION}-Windows.prm
-        mv release-assets/macos/NukeAV1-macOS.zip    release-assets/NukeAV1-${VERSION}-macOS.zip
+        mv release-assets/windows/NukeAV.prm        release-assets/NukeAV-${VERSION}-Windows.prm
+        mv release-assets/macos/NukeAV-macOS.zip    release-assets/NukeAV-${VERSION}-macOS.zip
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        name: "NukeAV1 ${{ steps.get_version.outputs.version }}"
+        name: "NukeAV ${{ steps.get_version.outputs.version }}"
         tag_name: ${{ github.ref_name }}
         draft: false
         prerelease: false
         generate_release_notes: true
         files: |
-          release-assets/NukeAV1-${{ steps.get_version.outputs.version }}-Windows.prm
-          release-assets/NukeAV1-${{ steps.get_version.outputs.version }}-macOS.zip
+          release-assets/NukeAV-${{ steps.get_version.outputs.version }}-Windows.prm
+          release-assets/NukeAV-${{ steps.get_version.outputs.version }}-macOS.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
