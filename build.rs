@@ -40,7 +40,7 @@ fn run_command_streaming(cmd_program: &Path, cmd_args: &[&str], current_dir: &Pa
 
     if let Some(stdout) = child.stdout.take() {
         let reader = BufReader::new(stdout);
-        for l in reader.lines().flatten() {
+        for l in reader.lines().map_while(Result::ok) {
             println!("cargo:warning={}", l);
         }
     }
@@ -54,6 +54,24 @@ fn main() {
         let _ = fs::create_dir_all(cache_dir);
     }
 
+    // Auto-detect LLVM / libclang on Windows if not explicitly set
+    if env::var("LIBCLANG_PATH").is_err() {
+        for candidate in &[
+            r"C:\Program Files\LLVM\bin",
+            r"C:\Program Files (x86)\LLVM\bin",
+            r"C:\msys64\clang64\bin",
+            r"C:\msys64\mingw64\bin",
+        ] {
+            let candidate_path = Path::new(candidate);
+            if candidate_path.join("libclang.dll").exists() {
+                unsafe {
+                    env::set_var("LIBCLANG_PATH", candidate_path);
+                }
+                break;
+            }
+        }
+    }
+
     println!("cargo:rerun-if-changed=src/ffi/wrapper.hpp");
     
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
@@ -62,26 +80,86 @@ fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     
-    // 1. Setup Adobe SDK (Find Windows or Mac SDK zip file)
-    let adobe_sdk_dir = out_dir.join("Adobe_Premiere_Pro_SDK");
-    if !adobe_sdk_dir.exists() {
-        let mut zip_path = PathBuf::from(&manifest_dir).join("sdk").join("Premiere Pro 26.0 C++ SDK Windows.zip");
-        if !zip_path.exists() {
-            zip_path = PathBuf::from(&manifest_dir).join("sdk").join("Premiere Pro 26.0 C++ SDK Mac.zip");
+    // 1. Setup Adobe SDK (Find Windows or Mac SDK zip file or existing directory)
+    let sdk_headers = if let Ok(custom_dir) = env::var("ADOBE_SDK_DIR") {
+        PathBuf::from(custom_dir)
+    } else {
+        let manifest_sdk = PathBuf::from(&manifest_dir).join("sdk");
+        let direct_headers = manifest_sdk.join("Premiere Pro 26.0 C++ SDK").join("Examples").join("Headers");
+        if direct_headers.exists() {
+            direct_headers
+        } else {
+            let adobe_sdk_dir = out_dir.join("Adobe_Premiere_Pro_SDK");
+            let extracted_headers = adobe_sdk_dir.join("Premiere Pro 26.0 C++ SDK").join("Examples").join("Headers");
+            if !extracted_headers.exists() {
+                let mut zip_path = manifest_sdk.join("Premiere Pro 26.0 C++ SDK Windows.zip");
+                if !zip_path.exists() {
+                    zip_path = manifest_sdk.join("Premiere Pro 26.0 C++ SDK Mac.zip");
+                }
+                
+                fs::create_dir_all(&adobe_sdk_dir).unwrap();
+                
+                let file = std::fs::File::open(&zip_path).expect("Failed to open Adobe SDK zip (Neither Windows nor Mac zip found)");
+                let mut archive = zip::ZipArchive::new(file).expect("Failed to parse zip archive");
+                archive.extract(&adobe_sdk_dir).expect("Failed to extract Adobe SDK");
+            }
+            extracted_headers
         }
-        
-        fs::create_dir_all(&adobe_sdk_dir).unwrap();
-        
-        let file = std::fs::File::open(&zip_path).expect("Failed to open Adobe SDK zip (Neither Windows nor Mac zip found)");
-        let mut archive = zip::ZipArchive::new(file).expect("Failed to parse zip archive");
-        archive.extract(&adobe_sdk_dir).expect("Failed to extract Adobe SDK");
-    }
-    
-    // The zip crate preserves the top-level directory "Premiere Pro 26.0 C++ SDK" (same layout in both zips)
-    let sdk_headers = adobe_sdk_dir.join("Premiere Pro 26.0 C++ SDK").join("Examples").join("Headers");
+    };
 
-    // 2. Setup VCPKG and Compile FFmpeg statically
-    let vcpkg_dir = out_dir.join("vcpkg");
+    // 2. Generate Premiere Pro Bindings
+    let mut builder = bindgen::Builder::default()
+        .header("src/ffi/wrapper.hpp")
+        .rust_target(bindgen::RustTarget::nightly())
+        .clang_arg(format!("-I{}", sdk_headers.display()))
+        .clang_arg("-x")
+        .clang_arg("c++")
+        .clang_arg("-std=c++14")
+        .layout_tests(false)
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
+
+    // Add clang builtin includes if available
+    if let Ok(llvm_path) = env::var("LIBCLANG_PATH") {
+        let llvm_lib = PathBuf::from(llvm_path).parent().unwrap().join("lib").join("clang");
+        if let Ok(entries) = fs::read_dir(llvm_lib) {
+            for entry in entries.flatten() {
+                let inc = entry.path().join("include");
+                if inc.exists() {
+                    builder = builder.clang_arg(format!("-isystem{}", inc.display()));
+                }
+            }
+        }
+    }
+    // Also include CRT / MinGW headers if present
+    for sys_inc in &[
+        r"C:\msys64\ucrt64\include",
+        r"C:\msys64\mingw64\include",
+    ] {
+        let p = Path::new(sys_inc);
+        if p.exists() {
+            builder = builder.clang_arg(format!("-isystem{}", p.display()));
+        }
+    }
+
+    let bindings = builder.generate();
+
+    match bindings {
+        Ok(b) => {
+            let path = out_dir.join("pr_sdk_bindings.rs");
+            b.write_to_file(&path)
+                .expect("Couldn't write bindings!");
+        }
+        Err(e) => {
+            panic!("Cannot generate bindings for Premiere Pro SDK: {:?}", e);
+        }
+    }
+
+    // 3. Setup VCPKG and Compile FFmpeg statically
+    let vcpkg_dir = if let Ok(root) = env::var("VCPKG_ROOT") {
+        PathBuf::from(root)
+    } else {
+        out_dir.join("vcpkg")
+    };
     
     let triplet = if target_os == "windows" {
         "x64-windows-static"
@@ -101,7 +179,11 @@ fn main() {
         "ffmpeg[core,avcodec,avformat,swscale,swresample,vpx,dav1d,aom]"
     };
 
-    if !vcpkg_dir.exists() {
+    let skip_ffmpeg_build = env::var("SKIP_FFMPEG_BUILD").is_ok();
+
+    if skip_ffmpeg_build {
+        println!("cargo:warning=SKIP_FFMPEG_BUILD is set. Skipping vcpkg compilation.");
+    } else if !vcpkg_dir.exists() {
         println!("cargo:warning=Cloning vcpkg and compiling FFmpeg from source. This will take 15-40 minutes!");
         
         let status = Command::new("git")
@@ -176,13 +258,17 @@ fn main() {
         }
     }
 
-    unsafe {
-        env::set_var("VCPKG_ROOT", &vcpkg_dir);
+    if !skip_ffmpeg_build {
+        unsafe {
+            if env::var("VCPKG_ROOT").is_err() {
+                env::set_var("VCPKG_ROOT", &vcpkg_dir);
+            }
+        }
+        vcpkg::Config::new()
+            .target_triplet(triplet)
+            .find_package("ffmpeg")
+            .expect("Failed to link ffmpeg from vcpkg");
     }
-    vcpkg::Config::new()
-        .target_triplet(triplet)
-        .find_package("ffmpeg")
-        .expect("Failed to link ffmpeg from vcpkg");
 
     // Link target-specific libraries
     if target_os == "windows" {
@@ -206,27 +292,5 @@ fn main() {
         println!("cargo:rustc-link-lib=z");
     }
 
-    // 4. Generate Premiere Pro Bindings
-    let bindings = bindgen::Builder::default()
-        .header("src/ffi/wrapper.hpp")
-        .rust_target(bindgen::RustTarget::nightly())
-        .clang_arg(format!("-I{}", sdk_headers.display()))
-        .clang_arg("-x")
-        .clang_arg("c++")
-        .clang_arg("-std=c++14")
-        .layout_tests(false)
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
-        .generate();
 
-    match bindings {
-        Ok(b) => {
-            let path = out_dir.join("pr_sdk_bindings.rs");
-            b.write_to_file(&path)
-                .expect("Couldn't write bindings!");
-            // Removed patch: bindgen 0.72+ already emits unsafe extern "C" when using Rust 2024/nightly target.
-        }
-        Err(e) => {
-            panic!("Cannot generate bindings for Premiere Pro SDK: {:?}", e);
-        }
-    }
 }

@@ -1,4 +1,4 @@
-﻿use std::ffi::c_void;
+use std::ffi::c_void;
 use std::ptr;
 use crate::*;
 use crate::ffmpeg_ffi::*;
@@ -29,6 +29,9 @@ pub unsafe fn handle_import_audio(param1: *mut c_void, param2: *mut c_void) -> p
     let buffer = import_audio.buffer;
 
     let num_channels = (*ffmpeg.audio_codec_ctx).ch_layout.nb_channels as usize;
+    if num_channels == 0 || importer_data.audio_buffer.is_empty() || buffer.is_null() {
+        return malUnknownError as prMALError;
+    }
 
     // Check if we need to seek
     let in_buffer_range = position >= importer_data.audio_buffer_start_sample

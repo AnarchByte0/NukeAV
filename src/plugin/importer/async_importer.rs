@@ -1,13 +1,13 @@
-﻿use std::ffi::c_void;
+use std::ffi::c_void;
 use std::os::raw::c_int;
 use std::ptr;
 
 use crate::*;
 use crate::importer::types::{ImporterData, WorkerCommand};
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Public structures
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 pub struct AsyncImporterData {
     /// Raw address of the ImporterData (file private data).
@@ -23,9 +23,9 @@ pub struct AsyncImporterData {
 unsafe impl Send for AsyncImporterData {}
 unsafe impl Sync for AsyncImporterData {}
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // imCreateAsyncImporter
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 pub unsafe fn handle_create_async_importer(
     std_parms: *mut crate::imStdParms,
@@ -92,9 +92,9 @@ pub unsafe fn handle_create_async_importer(
     malNoError as prMALError
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Async importer entry point (called by Premiere Pro)
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 pub unsafe extern "C" fn async_importer_entry(selector: c_int, param: *mut c_void) -> prMALError {
     crate::log_debug!("async_importer_entry called: selector = {}, param = {:?}", selector, param);
@@ -163,9 +163,9 @@ pub unsafe extern "C" fn async_importer_entry(selector: c_int, param: *mut c_voi
     aiUnsupported as prMALError
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Core frame delivery
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 unsafe fn handle_ai_get_frame(param: *mut c_void) -> prMALError {
     let src_video = param as *mut imSourceVideoRec;
@@ -195,7 +195,7 @@ unsafe fn handle_ai_get_frame(param: *mut c_void) -> prMALError {
         async_data.importer_data_ptr as *mut ImporterData
     );
 
-    // ── Determine what Premiere wants ────────────────────────────────────────
+    // -- Determine what Premiere wants ----------------------------------------
 
     let frame_time    = (*src_video).inFrameTime;
     let num_formats   = (*src_video).inNumFrameFormats;
@@ -242,7 +242,7 @@ unsafe fn handle_ai_get_frame(param: *mut c_void) -> prMALError {
     let width  = chosen_width;
     let height = chosen_height;
 
-    // ── Acquire SPBasicSuite ─────────────────────────────────────────────────
+    // -- Acquire SPBasicSuite -------------------------------------------------
 
     let pi_suites = async_data.pi_suites as *mut piSuites;
     if pi_suites.is_null() {
@@ -260,7 +260,7 @@ unsafe fn handle_ai_get_frame(param: *mut c_void) -> prMALError {
     let sp_basic: *mut SPBasicSuite = get_sp_fn();
     if sp_basic.is_null() { return aiFrameNotFound as prMALError; }
 
-    // ── Acquire PPixCreator Suite (version 1 — simplest, always present) ─────
+    // -- Acquire PPixCreator Suite (version 1 — simplest, always present) -----
 
     let suite_name_cstr = b"Premiere PPix Creator Suite\0";
     let mut creator_ptr: *const c_void = ptr::null();
@@ -286,7 +286,7 @@ unsafe fn handle_ai_get_frame(param: *mut c_void) -> prMALError {
         }
     };
 
-    // ── Create a new PPix with the correct format and size ───────────────────
+    // -- Create a new PPix with the correct format and size -------------------
 
     #[cfg(target_os = "windows")]
     let bounds = prRect {
@@ -320,7 +320,7 @@ unsafe fn handle_ai_get_frame(param: *mut c_void) -> prMALError {
         return aiFrameNotFound as prMALError;
     }
 
-    // ── Get pixel buffer pointer and row-bytes from the new PPix ─────────────
+    // -- Get pixel buffer pointer and row-bytes from the new PPix -------------
     // We use the modern PrSDKPPixSuite for this.
 
     let ppix_suite_name = b"Premiere PPix Suite\0";
@@ -357,9 +357,13 @@ unsafe fn handle_ai_get_frame(param: *mut c_void) -> prMALError {
             }
             return aiFrameNotFound as prMALError;
         }
-        if let Some(out) = (*src_video).outFrame.as_mut() {
-            *out = ppix_hand;
+        if (*src_video).outFrame.is_null() {
+            if let Some(dispose) = (*ppix_funcs).ppixDispose {
+                dispose(ppix_hand);
+            }
+            return aiUnknownError as prMALError;
         }
+        *(*src_video).outFrame = ppix_hand;
         return aiNoError as prMALError;
     }
 
@@ -390,7 +394,7 @@ unsafe fn handle_ai_get_frame(param: *mut c_void) -> prMALError {
         return aiFrameNotFound as prMALError;
     }
 
-    // ── Decode directly into the PPix pixel buffer ───────────────────────────
+    // -- Decode directly into the PPix pixel buffer ---------------------------
     let decode_result = do_decode(importer_data, frame_number, width, height, rowbytes, chosen_fmt, dst_ptr);
 
     release_suite();
@@ -402,7 +406,7 @@ unsafe fn handle_ai_get_frame(param: *mut c_void) -> prMALError {
         return aiFrameNotFound as prMALError;
     }
 
-    // ── Hand PPix to Premiere ─────────────────────────────────────────────────
+    // -- Hand PPix to Premiere -------------------------------------------------
     if (*src_video).outFrame.is_null() {
         if let Some(dispose) = ppix_suite.Dispose {
             dispose(ppix_hand);
@@ -414,9 +418,9 @@ unsafe fn handle_ai_get_frame(param: *mut c_void) -> prMALError {
     aiNoError as prMALError
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Reuse existing synchronous decode path from image.rs
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 unsafe fn do_decode(
     importer_data: *mut ImporterData,
@@ -608,9 +612,13 @@ pub unsafe fn handle_get_source_video(param1: *mut c_void, param2: *mut c_void) 
             }
             return malUnknownError as prMALError;
         }
-        if let Some(out) = (*src_video).outFrame.as_mut() {
-            *out = ppix_hand;
+        if (*src_video).outFrame.is_null() {
+            if let Some(dispose) = (*ppix_funcs).ppixDispose {
+                dispose(ppix_hand);
+            }
+            return malUnknownError as prMALError;
         }
+        *(*src_video).outFrame = ppix_hand;
         return malNoError as prMALError;
     }
     

@@ -1,4 +1,4 @@
-﻿use std::ffi::c_void;
+use std::ffi::c_void;
 use std::ptr;
 use crate::*;
 use crate::ffmpeg_ffi::*;
@@ -225,6 +225,10 @@ pub unsafe fn handle_import_image(param1: *mut c_void, param2: *mut c_void) -> p
     let pix_fmt = import_image.pixformat;
 
     crate::log_debug!("handle_import_image: frame={}, dstSize={}x{}, format={}", requested_frame, dst_w, dst_h, pix_fmt);
+
+    if import_image.pix.is_null() || dst_w <= 0 || dst_h <= 0 {
+        return malUnknownError as prMALError;
+    }
 
     // Lock cache to look up or request decoding
     let mut target_frame: *mut AVFrame = ptr::null_mut();

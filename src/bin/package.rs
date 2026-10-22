@@ -1,4 +1,4 @@
-﻿use std::process::Command;
+use std::process::Command;
 use std::path::PathBuf;
 use std::fs;
 
@@ -33,11 +33,12 @@ fn main() {
     let output_dir = PathBuf::from(&manifest_dir).join("output");
     let dest_prm = output_dir.join("NukeAV.prm");
 
-    if !output_dir.exists()
-        && let Err(e) = fs::create_dir_all(&output_dir) {
+    if !output_dir.exists() {
+        if let Err(e) = fs::create_dir_all(&output_dir) {
             eprintln!("Failed to create output directory: {}", e);
             std::process::exit(1);
         }
+    }
 
     // 3. Copy the compiled DLL as a .prm file
     println!("Packaging NukeAV.prm to {}...", output_dir.display());

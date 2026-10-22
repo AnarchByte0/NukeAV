@@ -1,4 +1,4 @@
-﻿use crate::ffmpeg_ffi::*;
+use crate::ffmpeg_ffi::*;
 use std::ffi::CString;
 use std::ptr;
 
@@ -254,9 +254,9 @@ impl FFmpegEncoder {
             }
         }
 
-        // Custom FFmpeg flags (format: key=val,key2=val2)
-        if !custom_flags.is_empty() {
-            for pair in custom_flags.split(',') {
+        // Custom FFmpeg flags (format: key=val,key2=val2 or key=val:key2=val2)
+        if !custom_flags.is_empty() && !(*codec_ctx).priv_data.is_null() {
+            for pair in custom_flags.split(|c| c == ',' || c == ';' || c == ':') {
                 let kv: Vec<&str> = pair.split('=').collect();
                 if kv.len() == 2 {
                     if let (Ok(key), Ok(val)) = (CString::new(kv[0].trim()), CString::new(kv[1].trim())) {

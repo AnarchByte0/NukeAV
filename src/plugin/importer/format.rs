@@ -1,6 +1,6 @@
-﻿use std::ffi::c_void;
+use std::ffi::c_void;
 use crate::*;
-use crate::importer::utils::copy_c_str;
+use crate::utils::copy_c_str;
 
 pub unsafe fn handle_get_ind_format(param1: *mut c_void, param2: *mut c_void) -> prMALError {
     let index = param1 as usize;

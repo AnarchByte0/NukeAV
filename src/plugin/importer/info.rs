@@ -1,4 +1,4 @@
-﻿use std::ffi::{c_void, CString};
+use std::ffi::{c_void, CString};
 use std::ptr;
 use crate::*;
 use crate::ffmpeg_ffi::*;
@@ -34,8 +34,8 @@ pub unsafe fn handle_get_info8(_std_parms: *mut crate::imStdParms, param1: *mut 
     let path_str = get_utf16_string(file_access.filepath);
 
     let cache = METADATA_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Ok(guard) = cache.lock()
-        && let Some(cached) = guard.get(&path_str) {
+    if let Ok(guard) = cache.lock() {
+        if let Some(cached) = guard.get(&path_str) {
             crate::log_debug!("handle_get_info8: METADATA CACHE HIT for {}", path_str);
             file_info.hasVideo = 1;
             file_info.vidInfo.imageWidth = cached.width;
@@ -57,8 +57,11 @@ pub unsafe fn handle_get_info8(_std_parms: *mut crate::imStdParms, param1: *mut 
             file_info.vidInfo.supportsGetSourceVideo = 1;
             return malNoError as prMALError;
         }
+    }
 
-    let path_c = CString::new(path_str.clone()).unwrap();
+    let Ok(path_c) = CString::new(path_str.clone()) else {
+        return malUnknownError as prMALError;
+    };
 
     let mut fmt_ctx: *mut AVFormatContext = ptr::null_mut();
     if avformat_open_input(&mut fmt_ctx, path_c.as_ptr(), ptr::null_mut(), ptr::null_mut()) != 0 {
@@ -201,6 +204,6 @@ pub unsafe fn handle_get_info9(std_parms: *mut crate::imStdParms, param1: *mut c
     if file_info9.is_null() {
         return malUnknownError as prMALError;
     }
-    let file_info8 = std::ptr::addr_of_mut!((*file_info9).info) as *mut imFileInfoRec8;
+    let file_info8 = std::ptr::addr_of_mut!((*file_info9).info);
     handle_get_info8(std_parms, param1, file_info8 as *mut c_void)
 }

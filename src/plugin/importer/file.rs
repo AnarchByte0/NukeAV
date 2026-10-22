@@ -1,4 +1,4 @@
-﻿use std::ffi::{c_void, CString};
+use std::ffi::{c_void, CString};
 use std::ptr;
 use crate::*;
 use crate::ffmpeg_ffi::*;
@@ -46,7 +46,9 @@ pub unsafe fn handle_open_file8(std_parms: *mut imStdParms, param1: *mut c_void,
     let file_info = &file_open.fileinfo;
 
     let path_str = get_utf16_string(file_info.filepath);
-    let path_c = CString::new(path_str.clone()).unwrap();
+    let Ok(path_c) = CString::new(path_str.clone()) else {
+        return malUnknownError as prMALError;
+    };
 
     let mut fmt_ctx: *mut AVFormatContext = ptr::null_mut();
     if avformat_open_input(&mut fmt_ctx, path_c.as_ptr(), ptr::null_mut(), ptr::null_mut()) != 0 {
@@ -207,11 +209,10 @@ pub unsafe fn handle_open_file8(std_parms: *mut imStdParms, param1: *mut c_void,
                             0,
                             ptr::null_mut()
                         );
-                        if (err < 0 || swr_ctx.is_null() || swr_init(swr_ctx) < 0)
-                            && !swr_ctx.is_null() {
-                                swr_free(&mut swr_ctx);
-                                swr_ctx = ptr::null_mut();
-                            }
+                        if !swr_ctx.is_null() && (err < 0 || swr_init(swr_ctx) < 0) {
+                            swr_free(&mut swr_ctx);
+                            swr_ctx = ptr::null_mut();
+                        }
                         
                         audio_buffer = vec![Vec::new(); channels as usize];
                     } else {

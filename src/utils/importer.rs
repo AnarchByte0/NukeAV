@@ -1,4 +1,4 @@
-﻿use std::path::PathBuf;
+use std::path::PathBuf;
 
 #[cfg(target_os = "windows")]
 #[repr(C)]
@@ -40,15 +40,13 @@ pub fn get_adobe_pref_str(key: &str) -> Option<String> {
     // Find all version subdirectories
     let mut versions = Vec::new();
     if let Ok(entries) = std::fs::read_dir(&path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let file_name = entry.file_name();
-                let name_str = file_name.to_string_lossy();
-                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                    if name_str.chars().all(|c| c.is_digit(10) || c == '.') {
-                        versions.push(name_str.into_owned());
-                    }
-                }
+        for entry in entries.flatten() {
+            let file_name = entry.file_name();
+            let name_str = file_name.to_string_lossy();
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false)
+                && name_str.chars().all(|c| c.is_ascii_digit() || c == '.')
+            {
+                versions.push(name_str.into_owned());
             }
         }
     }
@@ -65,22 +63,20 @@ pub fn get_adobe_pref_str(key: &str) -> Option<String> {
         let version_path = path.join(version);
         // Find Profile directory (e.g. Profile-username)
         if let Ok(entries) = std::fs::read_dir(&version_path) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let file_name = entry.file_name();
-                    let name_str = file_name.to_string_lossy();
-                    if name_str.starts_with("Profile-") {
-                        let prefs_file = version_path.join(name_str.as_ref()).join("Adobe Premiere Pro Prefs");
-                        if prefs_file.exists() {
-                            if let Ok(content) = std::fs::read_to_string(&prefs_file) {
-                                let start_tag = format!("<{}>", key);
-                                let end_tag = format!("</{}>", key);
-                                if let Some(start_idx) = content.find(&start_tag) {
-                                    if let Some(end_idx) = content.find(&end_tag) {
-                                        let val_start = start_idx + start_tag.len();
-                                        if end_idx > val_start {
-                                            return Some(content[val_start..end_idx].to_string());
-                                        }
+            for entry in entries.flatten() {
+                let file_name = entry.file_name();
+                let name_str = file_name.to_string_lossy();
+                if name_str.starts_with("Profile-") {
+                    let prefs_file = version_path.join(name_str.as_ref()).join("Adobe Premiere Pro Prefs");
+                    if prefs_file.exists() {
+                        if let Ok(content) = std::fs::read_to_string(&prefs_file) {
+                            let start_tag = format!("<{}>", key);
+                            let end_tag = format!("</{}>", key);
+                            if let Some(start_idx) = content.find(&start_tag) {
+                                if let Some(end_idx) = content.find(&end_tag) {
+                                    let val_start = start_idx + start_tag.len();
+                                    if end_idx > val_start {
+                                        return Some(content[val_start..end_idx].to_string());
                                     }
                                 }
                             }

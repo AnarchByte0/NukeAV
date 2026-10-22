@@ -1,4 +1,4 @@
-﻿use crate::ffmpeg_ffi::*;
+use crate::ffmpeg_ffi::*;
 use std::sync::{Arc, Mutex, Condvar};
 use std::sync::mpsc::Sender;
 use std::collections::HashSet;
@@ -64,12 +64,11 @@ impl Drop for ImporterData {
 
         unsafe {
             // Free the cache frames
-            if let Ok(guard) = self.cache.0.lock() {
-                for f in &guard.frame_cache {
-                    let mut frame_ptr = f.frame;
-                    if !frame_ptr.is_null() {
-                        av_frame_free(&mut frame_ptr);
-                    }
+            let cache_guard = self.cache.0.lock().unwrap_or_else(|e| e.into_inner());
+            for f in &cache_guard.frame_cache {
+                let mut frame_ptr = f.frame;
+                if !frame_ptr.is_null() {
+                    av_frame_free(&mut frame_ptr);
                 }
             }
 
@@ -78,28 +77,27 @@ impl Drop for ImporterData {
             }
 
             // Free context struct itself
-            if let Ok(mut ffmpeg) = self.ffmpeg.lock() {
-                if !ffmpeg.packet.is_null() {
-                    av_packet_free(&mut ffmpeg.packet);
-                }
-                if !ffmpeg.frame.is_null() {
-                    av_frame_free(&mut ffmpeg.frame);
-                }
-                if !ffmpeg.codec_ctx.is_null() {
-                    avcodec_free_context(&mut ffmpeg.codec_ctx);
-                }
-                if !ffmpeg.audio_frame.is_null() {
-                    av_frame_free(&mut ffmpeg.audio_frame);
-                }
-                if !ffmpeg.audio_codec_ctx.is_null() {
-                    avcodec_free_context(&mut ffmpeg.audio_codec_ctx);
-                }
-                if !ffmpeg.swr_ctx.is_null() {
-                    swr_free(&mut ffmpeg.swr_ctx);
-                }
-                if !ffmpeg.format_ctx.is_null() {
-                    avformat_close_input(&mut ffmpeg.format_ctx);
-                }
+            let mut ffmpeg = self.ffmpeg.lock().unwrap_or_else(|e| e.into_inner());
+            if !ffmpeg.packet.is_null() {
+                av_packet_free(&mut ffmpeg.packet);
+            }
+            if !ffmpeg.frame.is_null() {
+                av_frame_free(&mut ffmpeg.frame);
+            }
+            if !ffmpeg.codec_ctx.is_null() {
+                avcodec_free_context(&mut ffmpeg.codec_ctx);
+            }
+            if !ffmpeg.audio_frame.is_null() {
+                av_frame_free(&mut ffmpeg.audio_frame);
+            }
+            if !ffmpeg.audio_codec_ctx.is_null() {
+                avcodec_free_context(&mut ffmpeg.audio_codec_ctx);
+            }
+            if !ffmpeg.swr_ctx.is_null() {
+                swr_free(&mut ffmpeg.swr_ctx);
+            }
+            if !ffmpeg.format_ctx.is_null() {
+                avformat_close_input(&mut ffmpeg.format_ctx);
             }
         }
     }
