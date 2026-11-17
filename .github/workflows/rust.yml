@@ -1,12 +1,9 @@
-﻿name: Build Plugin (macOS)
+﻿name: Rust CI & Release Build
 
 on:
   push:
     tags:
       - "v*"
-    branches:
-      - main
-  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,6 +15,74 @@ env:
   VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-cache
 
 jobs:
+  build-windows:
+    name: Build Plugin (Windows)
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Cache vcpkg
+      uses: actions/cache@v4
+      with:
+        path: |
+          target/vcpkg
+          target/release/build
+        key: ${{ runner.os }}-vcpkg-${{ hashFiles('Cargo.lock', 'build.rs') }}
+        restore-keys: |
+          ${{ runner.os }}-vcpkg-
+
+    - name: Cache vcpkg binary cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}/vcpkg-cache
+        key: ${{ runner.os }}-vcpkg-binaries-${{ hashFiles('Cargo.lock', 'build.rs') }}
+        restore-keys: |
+          ${{ runner.os }}-vcpkg-binaries-
+
+    - name: Set up Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Set up MSVC & CMake
+      uses: aseprite/get-ninja@main
+
+    - name: Download Adobe Premiere Pro SDK (Windows)
+      shell: bash
+      env:
+        ADOBE_SDK_URL: ${{ secrets.ADOBE_SDK_URL }}
+      run: |
+        mkdir -p sdk
+        if [ -n "$ADOBE_SDK_URL" ]; then
+          echo "Downloading Adobe SDK from secrets..."
+          curl -L -o sdk/SDK.zip "$ADOBE_SDK_URL"
+          mv sdk/SDK.zip "sdk/Premiere Pro 26.0 C++ SDK Windows.zip"
+        else
+          echo "No ADOBE_SDK_URL secret provided. Checking if SDK zip is cached or present..."
+          if [ ! -f "sdk/Premiere Pro 26.0 C++ SDK Windows.zip" ]; then
+            echo "ERROR: Adobe Premiere Pro SDK zip not found! Please set the ADOBE_SDK_URL secret or place the zip in 'sdk/'."
+            exit 1
+          fi
+        fi
+
+    - name: Build plugin in Release Mode
+      run: cargo build --release
+
+    - name: Package Release Artifact
+      shell: bash
+      run: |
+        mkdir -p output
+        cp target/release/NukeAV.dll output/NukeAV.prm
+        echo "Artifact prepared at output/NukeAV.prm"
+
+    - name: Upload Windows Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: NukeAV-Windows-Artifact
+        path: output/NukeAV.prm
+        compression-level: 0
+        if-no-files-found: error
+
   build-macos:
     name: Build Plugin (macOS)
     runs-on: macos-latest
@@ -55,31 +120,15 @@ jobs:
       shell: bash
       env:
         ADOBE_SDK_URL: ${{ secrets.ADOBE_SDK_URL }}
-        ADOBE_SDK_TOKEN: ${{ secrets.ADOBE_SDK_TOKEN }}
       run: |
         mkdir -p sdk
         if [ -n "$ADOBE_SDK_URL" ]; then
-          echo "Downloading Adobe SDK from secret URL..."
-          ok=0
-          for attempt in 1 2 3; do
-            # Accept: application/octet-stream is REQUIRED for release-asset
-            # API URLs; without it the endpoint returns JSON metadata with 200.
-            code=$(curl -sL -H "Authorization: Bearer $ADOBE_SDK_TOKEN" \
-                        -H "Accept: application/octet-stream" \
-                        -o sdk/SDK.zip -w "%{http_code}" "$ADOBE_SDK_URL") || true
-            size=$(wc -c < sdk/SDK.zip 2>/dev/null || echo 0)
-            echo "attempt $attempt: http=$code size=$size"
-            if [ "$code" = "200" ] && [ "$size" -gt 1000000 ] && unzip -tq sdk/SDK.zip > /dev/null 2>&1; then
-              ok=1; break
-            fi
-            head -c 200 sdk/SDK.zip 2>/dev/null | cat -v; echo
-            sleep 5
-          done
-          if [ "$ok" != "1" ]; then echo "ERROR: SDK download failed integrity check"; exit 1; fi
+          echo "Downloading Adobe SDK from secrets..."
+          curl -L -o sdk/SDK.zip "$ADOBE_SDK_URL"
           mv sdk/SDK.zip "sdk/Premiere Pro 26.0 C++ SDK Mac.zip"
         else
           echo "No ADOBE_SDK_URL secret provided. Checking if cached SDK is present..."
-          if [ ! -f "sdk/Premiere Pro 26.0 C++ SDK Mac.zip" ]; then
+          if [ ! -f "sdk/Premiere Pro 26.0 C++ SDK Mac.zip" ] && [ ! -f "sdk/Premiere Pro 26.0 C++ SDK Windows.zip" ]; then
             echo "ERROR: Adobe Premiere Pro SDK zip not found! Please set the ADOBE_SDK_URL secret."
             exit 1
           fi
@@ -131,9 +180,6 @@ jobs:
         EOF
         echo "macOS Bundle prepared at output/NukeAV.bundle"
 
-        # Ad-hoc sign the bundle executable so it loads cleanly on macOS
-        codesign --force -s - --identifier libNukeAV.dylib output/NukeAV.bundle/Contents/MacOS/NukeAV
-
         # Zip the bundle so it uploads as a single file asset
         cd output
         zip -r NukeAV-macOS.zip NukeAV.bundle
@@ -146,3 +192,56 @@ jobs:
         path: output/NukeAV-macOS.zip
         compression-level: 0
         if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    # Only run on tag pushes, after both builds succeed
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ build-windows, build-macos ]
+    
+    # КЛЮЧОВЕ ВИПРАВЛЕННЯ: Надаємо екшену права на створення релізу
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Parse version from tag
+      id: get_version
+      run: |
+        VERSION="${GITHUB_REF#refs/tags/v}"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Download Windows artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: NukeAV-Windows-Artifact
+        path: release-assets/windows
+
+    - name: Download macOS artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: NukeAV-macOS-Artifact
+        path: release-assets/macos
+
+    - name: Rename assets for release
+      run: |
+        VERSION="${{ steps.get_version.outputs.version }}"
+        mv release-assets/windows/NukeAV.prm        release-assets/NukeAV-${VERSION}-Windows.prm
+        mv release-assets/macos/NukeAV-macOS.zip    release-assets/NukeAV-${VERSION}-macOS.zip
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        name: "NukeAV ${{ steps.get_version.outputs.version }}"
+        tag_name: ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        files: |
+          release-assets/NukeAV-${{ steps.get_version.outputs.version }}-Windows.prm
+          release-assets/NukeAV-${{ steps.get_version.outputs.version }}-macOS.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
