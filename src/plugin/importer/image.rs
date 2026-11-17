@@ -166,7 +166,9 @@ pub fn worker_thread_loop(
                                 }
                                 break;
                             }
-                        } else if receive_res == -11 || receive_res == -541478725 {
+                        // EAGAIN is platform-dependent (Linux/Windows 11, macOS 35):
+                        // always derive it from libc instead of hardcoding a value.
+                        } else if receive_res == -libc::EAGAIN || receive_res == -541478725 {
                             if av_read_frame(ffmpeg.format_ctx, ffmpeg.packet) >= 0 {
                                 if (*ffmpeg.packet).stream_index == video_stream_idx {
                                     let send_res = avcodec_send_packet(ffmpeg.codec_ctx, ffmpeg.packet);

@@ -87,7 +87,10 @@ pub unsafe fn handle_open_file8(std_parms: *mut imStdParms, param1: *mut c_void,
     
     crate::log_debug!("Importer opened file: {}, video codec: {} ({})", path_str, codec_name, codec_id);
 
-    if codec_id != AV_CODEC_ID_AV1 && codec_id != AV_CODEC_ID_VP9 && codec_id != AV_CODEC_ID_VP8 {
+    // Match by decoder name instead of numeric codec IDs: FFmpeg has renumbered
+    // AVCodecID values across major versions (e.g. AV1 225 -> 222 in FFmpeg 8),
+    // so compiled-in constants can reject files the runtime FFmpeg accepts.
+    if !matches!(codec_name.as_str(), "av1" | "vp9" | "vp8") {
         crate::log_debug!("Importer rejected file: codec not AV1/VP9/VP8");
         avformat_close_input(&mut fmt_ctx);
         return PrImporterReturnValue_imBadFile as prMALError;
