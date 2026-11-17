@@ -48,6 +48,8 @@ pub unsafe fn handle_import_audio(param1: *mut c_void, param2: *mut c_void) -> p
             0
         };
 
+        crate::log_debug!("[audio] seek: pos={} target_pts={} old_start={} old_len={}", position, target_pts, importer_data.audio_buffer_start_sample, importer_data.audio_buffer[0].len());
+
         av_seek_frame(
             ffmpeg.audio_format_ctx,
             importer_data.audio_stream_idx,
@@ -75,7 +77,11 @@ pub unsafe fn handle_import_audio(param1: *mut c_void, param2: *mut c_void) -> p
     let audio_stream = *(*ffmpeg.audio_format_ctx).streams.add(importer_data.audio_stream_idx as usize);
     let time_base = (*audio_stream).time_base;
 
-    while importer_data.audio_buffer[0].len() < size as usize {
+    // Fill until the buffer covers position..position+size — not just size
+    // samples: when the first decoded PTS rewinds audio_buffer_start_sample
+    // below position (AVSEEK_FLAG_BACKWARD lands early), the buffer needs
+    // extra content before anything maps onto the requested range.
+    while importer_data.audio_buffer_start_sample + importer_data.audio_buffer[0].len() as i64 < position + size as i64 {
         if av_read_frame(ffmpeg.audio_format_ctx, ffmpeg.audio_packet) < 0 {
             break;
         }
@@ -96,6 +102,7 @@ pub unsafe fn handle_import_audio(param1: *mut c_void, param2: *mut c_void) -> p
                             importer_data.audio_buffer_start_sample = actual_start_sample;
                         }
                         importer_data.needs_first_pts = false;
+                        crate::log_debug!("[audio] first pts: actual_start={} requested={}", importer_data.audio_buffer_start_sample, position);
                     }
 
                     if importer_data.audio_buffer_start_sample > position {
@@ -106,6 +113,7 @@ pub unsafe fn handle_import_audio(param1: *mut c_void, param2: *mut c_void) -> p
                             importer_data.audio_buffer[ch] = zeros;
                         }
                         importer_data.audio_buffer_start_sample = position;
+                        crate::log_debug!("[audio] gap padded: {} samples", gap);
                     }
 
                     let nb_samples = (*frame).nb_samples;
@@ -146,6 +154,23 @@ pub unsafe fn handle_import_audio(param1: *mut c_void, param2: *mut c_void) -> p
         av_packet_unref(ffmpeg.audio_packet);
     }
 
+    // Normalize so buffer[0] maps exactly to `position`: without this drain,
+    // audio content from before `position` would be served at `position`
+    // (audio lagging behind video after every seek).
+    let delta = position - importer_data.audio_buffer_start_sample;
+    if delta > 0 {
+        let skip = delta as usize;
+        if skip <= importer_data.audio_buffer[0].len() {
+            for ch in 0..num_channels {
+                importer_data.audio_buffer[ch].drain(0..skip);
+            }
+            importer_data.audio_buffer_start_sample = position;
+            crate::log_debug!("[audio] realign: drained {} samples", skip);
+        } else {
+            crate::log_debug!("[audio] realign skipped: skip={} > buffer len={}", skip, importer_data.audio_buffer[0].len());
+        }
+    }
+
     let copy_size = std::cmp::min(size as usize, importer_data.audio_buffer[0].len());
 
     for ch in 0..num_channels {
@@ -168,6 +193,7 @@ pub unsafe fn handle_import_audio(param1: *mut c_void, param2: *mut c_void) -> p
         }
     }
     importer_data.audio_buffer_start_sample += copy_size as i64;
+    crate::log_debug!("[audio] served: pos={} size={} copy={} short_fill={}", position, size, copy_size, copy_size < size as usize);
 
     malNoError as prMALError
 }
