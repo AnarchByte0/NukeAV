@@ -81,7 +81,7 @@ pub unsafe fn handle_import_audio(param1: *mut c_void, param2: *mut c_void) -> p
     // samples: when the first decoded PTS rewinds audio_buffer_start_sample
     // below position (AVSEEK_FLAG_BACKWARD lands early), the buffer needs
     // extra content before anything maps onto the requested range.
-    while importer_data.audio_buffer_start_sample + importer_data.audio_buffer[0].len() as i64 < position + size as i64 {
+    while (importer_data.audio_buffer_start_sample + importer_data.audio_buffer[0].len() as i64) < (position + size as i64) {
         if av_read_frame(ffmpeg.audio_format_ctx, ffmpeg.audio_packet) < 0 {
             break;
         }
