@@ -38,10 +38,10 @@ pub unsafe fn handle_import_audio(param1: *mut c_void, param2: *mut c_void) -> p
         && position < importer_data.audio_buffer_start_sample + importer_data.audio_buffer[0].len() as i64;
 
     if !in_buffer_range {
-        let audio_stream = *(*ffmpeg.format_ctx).streams.add(importer_data.audio_stream_idx as usize);
+        let audio_stream = *(*ffmpeg.audio_format_ctx).streams.add(importer_data.audio_stream_idx as usize);
         let time_base = (*audio_stream).time_base;
         let sample_rate = (*ffmpeg.audio_codec_ctx).sample_rate as i64;
-        
+
         let target_pts = if time_base.num > 0 && sample_rate > 0 {
             (position * time_base.den as i64) / (sample_rate * time_base.num as i64)
         } else {
@@ -49,7 +49,7 @@ pub unsafe fn handle_import_audio(param1: *mut c_void, param2: *mut c_void) -> p
         };
 
         av_seek_frame(
-            ffmpeg.format_ctx,
+            ffmpeg.audio_format_ctx,
             importer_data.audio_stream_idx,
             target_pts,
             AVSEEK_FLAG_BACKWARD as i32,
@@ -72,16 +72,16 @@ pub unsafe fn handle_import_audio(param1: *mut c_void, param2: *mut c_void) -> p
     }
 
     let sample_rate = (*ffmpeg.audio_codec_ctx).sample_rate as i64;
-    let audio_stream = *(*ffmpeg.format_ctx).streams.add(importer_data.audio_stream_idx as usize);
+    let audio_stream = *(*ffmpeg.audio_format_ctx).streams.add(importer_data.audio_stream_idx as usize);
     let time_base = (*audio_stream).time_base;
 
     while importer_data.audio_buffer[0].len() < size as usize {
-        if av_read_frame(ffmpeg.format_ctx, ffmpeg.packet) < 0 {
+        if av_read_frame(ffmpeg.audio_format_ctx, ffmpeg.audio_packet) < 0 {
             break;
         }
 
-        if (*ffmpeg.packet).stream_index == importer_data.audio_stream_idx
-            && avcodec_send_packet(ffmpeg.audio_codec_ctx, ffmpeg.packet) == 0 {
+        if (*ffmpeg.audio_packet).stream_index == importer_data.audio_stream_idx
+            && avcodec_send_packet(ffmpeg.audio_codec_ctx, ffmpeg.audio_packet) == 0 {
                 while avcodec_receive_frame(ffmpeg.audio_codec_ctx, ffmpeg.audio_frame) == 0 {
                     let frame = ffmpeg.audio_frame;
 
@@ -143,7 +143,7 @@ pub unsafe fn handle_import_audio(param1: *mut c_void, param2: *mut c_void) -> p
                     }
                 }
             }
-        av_packet_unref(ffmpeg.packet);
+        av_packet_unref(ffmpeg.audio_packet);
     }
 
     let copy_size = std::cmp::min(size as usize, importer_data.audio_buffer[0].len());
