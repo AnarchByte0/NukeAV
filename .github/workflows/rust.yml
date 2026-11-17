@@ -60,11 +60,22 @@ jobs:
         mkdir -p sdk
         if [ -n "$ADOBE_SDK_URL" ]; then
           echo "Downloading Adobe SDK from secret URL..."
-          if [ -n "$ADOBE_SDK_TOKEN" ]; then
-            curl -L --fail -H "Authorization: Bearer $ADOBE_SDK_TOKEN" -o sdk/SDK.zip "$ADOBE_SDK_URL"
-          else
-            curl -L --fail -o sdk/SDK.zip "$ADOBE_SDK_URL"
-          fi
+          ok=0
+          for attempt in 1 2 3; do
+            # Accept: application/octet-stream is REQUIRED for release-asset
+            # API URLs; without it the endpoint returns JSON metadata with 200.
+            code=$(curl -sL -H "Authorization: Bearer $ADOBE_SDK_TOKEN" \
+                        -H "Accept: application/octet-stream" \
+                        -o sdk/SDK.zip -w "%{http_code}" "$ADOBE_SDK_URL") || true
+            size=$(wc -c < sdk/SDK.zip 2>/dev/null || echo 0)
+            echo "attempt $attempt: http=$code size=$size"
+            if [ "$code" = "200" ] && [ "$size" -gt 1000000 ] && unzip -tq sdk/SDK.zip > /dev/null 2>&1; then
+              ok=1; break
+            fi
+            head -c 200 sdk/SDK.zip 2>/dev/null | cat -v; echo
+            sleep 5
+          done
+          if [ "$ok" != "1" ]; then echo "ERROR: SDK download failed integrity check"; exit 1; fi
           mv sdk/SDK.zip "sdk/Premiere Pro 26.0 C++ SDK Mac.zip"
         else
           echo "No ADOBE_SDK_URL secret provided. Checking if cached SDK is present..."
