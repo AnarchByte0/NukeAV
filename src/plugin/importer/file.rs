@@ -87,7 +87,10 @@ pub unsafe fn handle_open_file8(std_parms: *mut imStdParms, param1: *mut c_void,
     
     crate::log_debug!("Importer opened file: {}, video codec: {} ({})", path_str, codec_name, codec_id);
 
-    if codec_id != AV_CODEC_ID_AV1 && codec_id != AV_CODEC_ID_VP9 && codec_id != AV_CODEC_ID_VP8 {
+    // Match by decoder name instead of numeric codec IDs: FFmpeg has renumbered
+    // AVCodecID values across major versions (e.g. AV1 225 -> 222 in FFmpeg 8),
+    // so compiled-in constants can reject files the runtime FFmpeg accepts.
+    if !matches!(codec_name.as_str(), "av1" | "vp9" | "vp8") {
         crate::log_debug!("Importer rejected file: codec not AV1/VP9/VP8");
         avformat_close_input(&mut fmt_ctx);
         return PrImporterReturnValue_imBadFile as prMALError;
@@ -230,12 +233,36 @@ pub unsafe fn handle_open_file8(std_parms: *mut imStdParms, param1: *mut c_void,
     let frame = av_frame_alloc();
     let packet = av_packet_alloc();
 
+    // Open a second demuxer context for the audio path so the video worker and
+    // audio decoding never interleave av_read_frame calls on one AVFormatContext
+    // (interleaving discarded video packets and let audio seeks drag the shared
+    // demuxer away mid-decode, producing missing frames).
+    let mut audio_format_ctx: *mut AVFormatContext = ptr::null_mut();
+    let mut audio_packet = av_packet_alloc();
+    if audio_stream_idx != -1 && !audio_codec_ctx.is_null() {
+        if avformat_open_input(&mut audio_format_ctx, path_c.as_ptr(), ptr::null_mut(), ptr::null_mut()) != 0 {
+            audio_format_ctx = ptr::null_mut();
+        }
+    }
+    if audio_format_ctx.is_null() {
+        // No separate context available: disable the audio path rather than
+        // fall back to sharing the video demuxer.
+        if !audio_codec_ctx.is_null() {
+            avcodec_free_context(&mut audio_codec_ctx);
+            audio_codec_ctx = ptr::null_mut();
+        }
+        av_packet_free(&mut audio_packet);
+        audio_packet = ptr::null_mut();
+    }
+
     let ffmpeg_ctx = Arc::new(Mutex::new(FFmpegContext {
         format_ctx: fmt_ctx,
+        audio_format_ctx,
         codec_ctx,
         frame,
         packet,
         audio_codec_ctx,
+        audio_packet,
         audio_frame,
         swr_ctx,
     }));

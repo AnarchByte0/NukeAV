@@ -81,30 +81,43 @@ fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     
     // 1. Setup Adobe SDK (Find Windows or Mac SDK zip file or existing directory)
+    // The SDK version rotates (26.0, 27.0, ...): locate the
+    // "Premiere Pro <version> C++ SDK" root wherever it sits instead of
+    // hardcoding one version.
+    let find_sdk_headers = |base: &Path| -> Option<PathBuf> {
+        for entry in fs::read_dir(base).ok()? {
+            let p = entry.ok()?.path();
+            if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+                if name.starts_with("Premiere Pro") && name.ends_with("C++ SDK") {
+                    return Some(p.join("Examples").join("Headers"));
+                }
+            }
+        }
+        None
+    };
+
     let sdk_headers = if let Ok(custom_dir) = env::var("ADOBE_SDK_DIR") {
         PathBuf::from(custom_dir)
     } else {
         let manifest_sdk = PathBuf::from(&manifest_dir).join("sdk");
-        let direct_headers = manifest_sdk.join("Premiere Pro 26.0 C++ SDK").join("Examples").join("Headers");
-        if direct_headers.exists() {
-            direct_headers
-        } else {
-            let adobe_sdk_dir = out_dir.join("Adobe_Premiere_Pro_SDK");
-            let extracted_headers = adobe_sdk_dir.join("Premiere Pro 26.0 C++ SDK").join("Examples").join("Headers");
-            if !extracted_headers.exists() {
+        let adobe_sdk_dir = out_dir.join("Adobe_Premiere_Pro_SDK");
+        find_sdk_headers(&manifest_sdk)
+            .or_else(|| find_sdk_headers(&adobe_sdk_dir))
+            .unwrap_or_else(|| {
                 let mut zip_path = manifest_sdk.join("Premiere Pro 26.0 C++ SDK Windows.zip");
                 if !zip_path.exists() {
                     zip_path = manifest_sdk.join("Premiere Pro 26.0 C++ SDK Mac.zip");
                 }
-                
+
                 fs::create_dir_all(&adobe_sdk_dir).unwrap();
-                
+
                 let file = std::fs::File::open(&zip_path).expect("Failed to open Adobe SDK zip (Neither Windows nor Mac zip found)");
                 let mut archive = zip::ZipArchive::new(file).expect("Failed to parse zip archive");
                 archive.extract(&adobe_sdk_dir).expect("Failed to extract Adobe SDK");
-            }
-            extracted_headers
-        }
+
+                find_sdk_headers(&adobe_sdk_dir)
+                    .expect("Adobe SDK: no 'Premiere Pro * C++ SDK' directory found after extraction")
+            })
     };
 
     // 2. Generate Premiere Pro Bindings

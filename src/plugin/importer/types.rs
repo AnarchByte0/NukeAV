@@ -17,6 +17,12 @@ pub struct FFmpegContext {
     pub codec_ctx: *mut AVCodecContext,
     pub frame: *mut AVFrame,
     pub packet: *mut AVPacket,
+    // Separate demuxer context + packet for audio: sharing one AVFormatContext
+    // between the video worker and the audio path made av_read_frame interleave
+    // and silently discard video packets (missing frames), and audio seeks
+    // dragged the shared demuxer away mid-decode.
+    pub audio_format_ctx: *mut AVFormatContext,
+    pub audio_packet: *mut AVPacket,
     pub audio_codec_ctx: *mut AVCodecContext,
     pub audio_frame: *mut AVFrame,
     pub swr_ctx: *mut SwrContext,
@@ -81,6 +87,9 @@ impl Drop for ImporterData {
             if !ffmpeg.packet.is_null() {
                 av_packet_free(&mut ffmpeg.packet);
             }
+            if !ffmpeg.audio_packet.is_null() {
+                av_packet_free(&mut ffmpeg.audio_packet);
+            }
             if !ffmpeg.frame.is_null() {
                 av_frame_free(&mut ffmpeg.frame);
             }
@@ -98,6 +107,9 @@ impl Drop for ImporterData {
             }
             if !ffmpeg.format_ctx.is_null() {
                 avformat_close_input(&mut ffmpeg.format_ctx);
+            }
+            if !ffmpeg.audio_format_ctx.is_null() {
+                avformat_close_input(&mut ffmpeg.audio_format_ctx);
             }
         }
     }
