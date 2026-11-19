@@ -1,109 +1,123 @@
 ﻿# NukeAV 🚀
 
+[![Latest Release](https://img.shields.io/github/v/release/AnarchByte0/NukeAV?style=for-the-badge&color=blue)](https://github.com/AnarchByte0/NukeAV/releases/latest)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-lightgrey?style=for-the-badge)](#installation-)
 [![Ko-Fi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/anarchbyte)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/anarchbyte)
 
-A high-performance **AV1, VP8 & VP9 Importer and Exporter plugin for Adobe Premiere Pro**, built natively in Rust. It utilizes **FFmpeg** (statically linked via vcpkg) to support decoding and encoding, with robust support for hardware acceleration and rich exporter settings.
+**Native AV1, VP8, and VP9 importer & exporter plugin for Adobe Premiere Pro — written in Rust and powered by statically linked FFmpeg.**
 
----
-
-## Key Features ✨
-
-- **Cross-Platform Support:** Native support for both **Windows** (`.prm`) and **macOS** (`.bundle` for both Apple Silicon M1/M2/M3 and Intel).
-- **High-Performance Importer (Decoder):** Decode AV1, VP8 and VP9 streams natively within the Premiere Pro timeline.
-- **Advanced Exporter (Encoder):** Encode sequences into AV1, VP8, and VP9 video streams.
-- **Dynamic Parameter UI Update:**
-  - Real-time interface updates when selecting **Rate Control** modes (Constant Bitrate, Constant QP, Variable Bitrate, or Variable Bitrate with Target Quality).
-  - Dynamically updates labels (e.g. "Constant QP (CQ / CQP Value)" or "Target Quality (CQ Value)") and hides/shows parameters based on the chosen mode.
-- **Dynamic Adobe Preferences Synchronization:**
-  - **Automatic Audio Cache Bypass:** Dynamically checks Premiere Pro's "Save media cache files next to originals" setting. If enabled, the plugin bypasses conforming `.cfa`/`.pek` files to prevent folder clutter; if disabled, it allows conformed cache in a centralized folder for better performance.
-  - **Dynamic RAM Cache Allocation:** Uses system FFI (Win32 API on Windows, `sysctl` on macOS) to fetch total physical RAM and automatically scales the timeline scrubbing cache size (from 4 up to 32 frames) for smooth navigation.
-  - **Global GPU Acceleration Sync:** Disables hardware-accelerated decoding fallbacks automatically if Premiere Pro's project renderer is set to Software Only.
-  - **Sequence Auto-fill:** Auto-populates default export parameters (width, height, FPS) matching your most recent sequence settings in Premiere Pro.
-- **Multiplexer Control:** Dynamic multiplexer options (`MP4`, `3GPP`, `None`), with automated audio stream silencing when `None` is selected.
-
----
-
-## Architecture Overview 🏗️
-
-The project is structured as follows:
-- **`src/lib.rs`**: Main entry points (`xImportEntry` and `xSDKExport`) registered for Premiere Pro SDK FFI.
-- **`src/ffi/`**: Isolated direct FFI bindings.
-  - `adobe.rs`: Auto-generated bindings to Premiere Pro C++ SDK.
-  - `ffmpeg.rs`: FFI bindings to static FFmpeg libraries.
-- **`src/plugin/`**: Core video plugin logic.
-  - `importer/`: Handles importing, frame-by-frame decoding, and asynchronous parsing of AV1, VP8 and VP9 video.
-  - `exporter/`: Manages exporting configurations, multiplexer preferences, and interfacing with FFmpeg encoders.
-  - `shared.rs`: Common pixel format and color space conversion utilities shared between importer and exporter to minimize binary size.
-- **`src/utils/`**: Shared helper files (UIBuilder, cache preference check, string conversions).
-
----
-
-## Build Instructions 🛠️
-
-### Prerequisites
-
-#### Windows
-1. **Windows 10/11**
-2. **Rust (Edition 2024)** installed via Rustup.
-3. **Visual Studio Build Tools** (MSVC C++ compiler).
-4. **Git** and **CMake** (required for `vcpkg` to build dependencies).
-
-#### macOS
-1. **macOS 11.0 or newer**
-2. **Rust (Edition 2024)** installed via Rustup.
-3. **Xcode Command Line Tools** (Clang).
-4. **Homebrew** packages: `brew install cmake ninja nasm`.
-
-### Setting up the Adobe Premiere Pro C++ SDK
-Since the Adobe SDK contains proprietary headers, it is not distributed directly in this repository:
-1. Download the **Premiere Pro C++ SDK** (Version 26.0 recommended) from the Adobe Developer Console.
-2. Put the zip file into the `sdk/` directory:
-   - For Windows: Rename to `Premiere Pro 26.0 C++ SDK Windows.zip`
-   - For macOS: Rename to `Premiere Pro 26.0 C++ SDK Mac.zip`
-
-### Building
-Build the release binary by running:
-```bash
-cargo build --release
-```
-> [!NOTE]
-> **First Compile Duration:** The first run triggers `vcpkg` to download and statically build FFmpeg, aom, dav1d, and libvpx. This process is fully automated and uses **optimized binary caching in CI**. The first local compilation can take **15 to 40 minutes** depending on your CPU, while subsequent runs take only a few seconds.
+Drop `.mkv`, `.webm`, `.mp4`, or `.mov` files with AV1/VP8/VP9 straight onto your Premiere Pro timeline without transcoding, and export back out with hardware acceleration (NVENC, AMF, QSV) or high-quality software encoders.
 
 ---
 
 ## Installation 📦
 
+No compilation or external FFmpeg install is required — grab the pre-built plugin from the **[Releases page](https://github.com/AnarchByte0/NukeAV/releases/latest)**.
+
 ### Windows
-Copy the output binary file:
-- Source path: `target/release/NukeAV.dll`
-- Target path:
+1. Download **`NukeAV-*-Windows.prm`** from the latest release (you can rename it to `NukeAV.prm`).
+2. Copy it into Adobe's shared MediaCore plugins folder:
+   ```text
+   C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\
+   ```
+3. Restart **Adobe Premiere Pro**.
+
+### macOS (Apple Silicon & Intel)
+1. Download **`NukeAV-*-macOS.zip`** from the latest release and unzip it to get **`NukeAV.bundle`**.
+2. Move `NukeAV.bundle` into Adobe's shared MediaCore plugins folder:
+   ```text
+   /Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/
+   ```
+3. If macOS Gatekeeper warns about an unidentified developer on first launch, remove the quarantine attribute:
+   ```bash
+   sudo xattr -rd com.apple.quarantine "/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/NukeAV.bundle"
+   ```
+4. Restart **Adobe Premiere Pro**.
+
+> [!TIP]
+> **Where to find it in Premiere Pro:**
+> - **Importing:** Just drag and drop `.mkv`, `.webm`, `.mp4`, or `.mov` files directly into your Project panel.
+> - **Exporting:** In the Export / Media Encoder **Format** dropdown, choose **AV1 (Nuke)**, **VP9 (Nuke)**, or **VP8 (Nuke)**.
+
+---
+
+## Supported Formats & Hardware Acceleration 🎯
+
+| Feature | Import (Decode) | Export (Encode) |
+| :--- | :--- | :--- |
+| **Video Codecs** | **AV1** (`dav1d` / `libaom`), **VP9**, **VP8** | **AV1**, **VP9**, **VP8** |
+| **Containers** | `.mkv`, `.webm`, `.mp4`, `.mov` | `.mp4`, `.mkv`, `.webm`, `.3gp` |
+| **Audio Codecs** | Decoded via FFmpeg (`swresample`) | **AAC**, **Opus**, **PCM** (`pcm_s16le`) |
+| **GPU Acceleration** | D3D11VA & CUDA (Windows), Auto-fallback | **NVENC** (NVIDIA), **AMF** (AMD), **QSV** (Intel) |
+| **Color & Bit Depth** | 8-bit, 10-bit+, HDR (32-bit float / 16-bit / 8-bit BGRA) | 8-bit 4:2:0, 10-bit 4:2:0 (HDR), RGBA |
+
+---
+
+## Key Features ✨
+
+* **Smooth Timeline Scrubbing & A/V Sync:** Asynchronous video importer with dedicated audio demuxing so video and audio never interfere or drift out of sync when seeking.
+* **Smart RAM Frame Cache:** Automatically detects your system's physical RAM (`GlobalMemoryStatusEx` on Windows, `sysctl` on macOS) and scales the frame cache from **4 to 32 frames**.
+* **Syncs with Premiere Pro Preferences:**
+  * **Audio Cache Bypass:** Reads Premiere's *"Save media cache files next to originals"* setting — skips generating `.cfa`/`.pek` clutter next to your source files when enabled, or uses centralized caching when disabled (can also be overridden in `%APPDATA%\NukeAV\config.txt` / `~/Library/Application Support/NukeAV/config.txt`).
+  * **GPU Preference Sync:** Respects Premiere Pro's global GPU acceleration toggle.
+  * **Sequence Auto-Fill:** Pre-fills default export width, height, and FPS from your most recent sequence.
+* **OBS-Style Exporter Controls:**
+  * **Rate Control:** CBR, CQP, VBR, and VBR with Target Quality — UI labels and fields update dynamically.
+  * **Tuning & Quality:** Presets (`P1`–`P7`), Tuning (`High Quality`, `Low Latency`, `Ultra Low Latency`), Multipass (Single Pass, 2-Pass Quarter/Full Resolution), Look-Ahead, Adaptive Quantization, B-Frames, Film Grain synthesis, and Custom FFmpeg flags (`key=val`).
+  * **Multiplexer Control:** Switch between `MP4`, `3GPP`, or `None` (raw video stream with automatic audio silencing).
+
+---
+
+## Building from Source 🛠️
+
+If you want to compile NukeAV yourself:
+
+### Prerequisites
+* **Windows:** Windows 10/11, [Rust](https://rustup.rs/) (Edition 2024), Visual Studio Build Tools (MSVC C++), Git, CMake, and LLVM (`libclang`).
+* **macOS:** macOS 11.0+, [Rust](https://rustup.rs/) (Edition 2024), Xcode Command Line Tools, and Homebrew dependencies:
+  ```bash
+  brew install cmake ninja nasm
+  ```
+
+### Adobe Premiere Pro C++ SDK
+Because Adobe's SDK headers are proprietary, they are not included in this repository:
+1. Download the **Premiere Pro C++ SDK** (26.0+) from the Adobe Developer Console.
+2. Place the archive or extracted SDK folder into `sdk/`:
+   * Windows: `sdk/Premiere Pro 26.0 C++ SDK Windows.zip`
+   * macOS: `sdk/Premiere Pro 26.0 C++ SDK Mac.zip`
+   * Or point `ADOBE_SDK_DIR` directly to the SDK's `Examples/Headers` directory.
+
+### Compile & Package
+```bash
+cargo build --release
 ```
-C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\NukeAV.prm
+On Windows, you can also build and package `output/NukeAV.prm` in one step:
+```bash
+cargo run --release --bin package
 ```
 
-### macOS
-Create the plugin bundle folder structure:
-- Source path: `target/release/libNukeAV.dylib`
-- Target bundle structure:
-```
-NukeAV.bundle/
-  Contents/
-    Info.plist
-    MacOS/
-      NukeAV  (copied from libNukeAV.dylib)
-```
-Copy `NukeAV.bundle` to:
-```
-/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/NukeAV.bundle
-```
+> [!NOTE]
+> **First build time:** The first release build automatically clones `vcpkg` and compiles FFmpeg along with `aom`, `dav1d`, and `libvpx` statically (~15–40 minutes depending on your CPU). Subsequent builds take just a few seconds.
+>
+> **Fast IDE / type-checking (`cargo check`):** Set `SKIP_FFMPEG_BUILD=1` to skip compiling FFmpeg when only checking Rust code or working in an IDE.
 
-Restart Adobe Premiere Pro to load the new plugin.
+<details>
+<summary><b>Architecture Overview</b> (for contributors)</summary>
+
+* **`src/lib.rs`** — Main plugin entry points (`xImportEntry` and `xSDKExport`) exported for Premiere Pro.
+* **`src/ffi/`** — Raw FFI bindings (`adobe.rs` generated via `bindgen` from `wrapper.hpp`, plus `ffmpeg.rs`).
+* **`src/plugin/importer/`** — Importer selectors, format registration, metadata cache, async frame worker, and independent audio/video demuxers.
+* **`src/plugin/exporter/`** — Exporter selectors, dynamic parameter UI, summary/query handlers, and FFmpeg encoding pipeline.
+* **`src/plugin/shared.rs`** — Pixel format and color space conversion helpers shared between importer and exporter.
+* **`src/utils/`** — `UIBuilder`, UTF-16 helpers, RAM detection, and Adobe preference readers.
+
+</details>
 
 ---
 
 ## License 📄
 
-This project is licensed under the **GNU General Public License v3.0** with the **Adobe SDK Linking Exception** under the name **AnarchByte**. See the [LICENSE](LICENSE) file for details.
+Licensed under the **GNU General Public License v3.0** with the **Adobe SDK Linking Exception** under **AnarchByte**. See [LICENSE](LICENSE) for full details.
 
-FFmpeg is licensed under the LGPL/GPL; compilation artifacts must respect individual third-party licenses when packaged.
+FFmpeg and its bundled codecs are subject to their respective LGPL/GPL and third-party licenses.
