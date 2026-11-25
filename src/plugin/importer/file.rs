@@ -299,6 +299,7 @@ pub unsafe fn handle_open_file8(std_parms: *mut imStdParms, param1: *mut c_void,
         hw_device_ctx,
         last_decoded_frame: Mutex::new(-999999),
         temp_bgra64_buffer: Mutex::new(Vec::new()),
+        sws_cache: Mutex::new(None),
         std_parms,
         async_data_ptr: std::ptr::null_mut(),
     });

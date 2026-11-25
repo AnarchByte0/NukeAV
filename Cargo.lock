@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "NukeAV"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "bindgen",
  "cc",
@@ -13,7 +13,6 @@ dependencies = [
  "symphonia",
  "vcpkg",
  "webm-iterable",
- "yuv",
  "zip",
 ]
 
@@ -1275,15 +1274,6 @@ name = "wit-bindgen"
 version = "0.57.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
-
-[[package]]
-name = "yuv"
-version = "0.8.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d85a782d94ee43f078bcfd6fa82d4e6a5b2d1cfbbad168e4df5a9f7b39ef48c"
-dependencies = [
- "num-traits",
-]
 
 [[package]]
 name = "zeroize"

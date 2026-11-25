@@ -40,6 +40,23 @@ pub enum WorkerCommand {
     Terminate,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub struct SwsParams {
+    pub src_w: i32,
+    pub src_h: i32,
+    pub src_fmt: i32,
+    pub dst_w: i32,
+    pub dst_h: i32,
+    pub dst_fmt: i32,
+}
+
+pub struct CachedSws {
+    pub ctx: *mut SwsContext,
+    pub params: SwsParams,
+}
+unsafe impl Send for CachedSws {}
+unsafe impl Sync for CachedSws {}
+
 pub struct ImporterData {
     pub ffmpeg: Arc<Mutex<FFmpegContext>>,
     pub video_stream_idx: i32,
@@ -56,6 +73,7 @@ pub struct ImporterData {
     pub hw_device_ctx: *mut AVBufferRef,
     pub last_decoded_frame: Mutex<i32>,
     pub temp_bgra64_buffer: Mutex<Vec<u16>>,
+    pub sws_cache: Mutex<Option<CachedSws>>,
     pub std_parms: *mut crate::imStdParms,
     pub async_data_ptr: *mut std::ffi::c_void,
 }
@@ -80,6 +98,13 @@ impl Drop for ImporterData {
 
             if !self.hw_device_ctx.is_null() {
                 av_buffer_unref(&mut self.hw_device_ctx);
+            }
+
+            let mut sws_guard = self.sws_cache.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(cached) = sws_guard.take() {
+                if !cached.ctx.is_null() {
+                    sws_freeContext(cached.ctx);
+                }
             }
 
             // Free context struct itself

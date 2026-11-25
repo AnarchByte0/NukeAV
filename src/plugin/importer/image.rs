@@ -2,7 +2,7 @@ use std::ffi::c_void;
 use std::ptr;
 use crate::*;
 use crate::ffmpeg_ffi::*;
-use crate::importer::types::{ImporterData, CachedFrame, WorkerCommand, CacheState, FFmpegContext};
+use crate::importer::types::{ImporterData, CachedFrame, WorkerCommand, CacheState, FFmpegContext, SwsParams, CachedSws};
 use std::sync::{Arc, Mutex, Condvar};
 
 pub const AV_NOPTS_VALUE: i64 = i64::MIN;
@@ -269,122 +269,90 @@ pub unsafe fn handle_import_image(param1: *mut c_void, param2: *mut c_void) -> p
         return malUnknownError as prMALError;
     }
 
-    // Frame is decoded, now scale/convert it
+    // Frame is decoded, now scale/convert it using a cached SwsContext
     let target_pix_fmt = import_image.pixformat;
     let mut return_error = malUnknownError as prMALError;
-    
-    if target_pix_fmt == PrPixelFormat_PrPixelFormat_BGRA_4444_32f {
+
+    let run_sws = |dst_fmt: AVPixelFormat, dest_data: &mut [*mut u8; 4], dest_linesize: &mut [i32; 4]| -> bool {
+        let params = SwsParams {
+            src_w: (*target_frame).width,
+            src_h: (*target_frame).height,
+            src_fmt: (*target_frame).format,
+            dst_w: import_image.dstWidth,
+            dst_h: import_image.dstHeight,
+            dst_fmt,
+        };
+        let mut sws_guard = importer_data.sws_cache.lock().unwrap_or_else(|e| e.into_inner());
+        let needs_recreate = match sws_guard.as_ref() {
+            Some(cached) => cached.params != params || cached.ctx.is_null(),
+            None => true,
+        };
+        if needs_recreate {
+            if let Some(old) = sws_guard.take() {
+                if !old.ctx.is_null() {
+                    sws_freeContext(old.ctx);
+                }
+            }
+            let ctx = sws_getContext(
+                params.src_w,
+                params.src_h,
+                params.src_fmt,
+                params.dst_w,
+                params.dst_h,
+                params.dst_fmt,
+                SWS_FAST_BILINEAR as i32,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null(),
+            );
+            if ctx.is_null() {
+                return false;
+            }
+            *sws_guard = Some(CachedSws { ctx, params });
+        }
+        let ctx = sws_guard.as_ref().unwrap().ctx;
+        sws_scale(
+            ctx,
+            (*target_frame).data.as_ptr() as *const *const u8,
+            (*target_frame).linesize.as_ptr(),
+            0,
+            (*target_frame).height,
+            dest_data.as_mut_ptr(),
+            dest_linesize.as_mut_ptr(),
+        );
+        true
+    };
+
+    if target_pix_fmt == PrPixelFormat_PrPixelFormat_BGRA_4444_32f
+        || target_pix_fmt == PrPixelFormat_PrPixelFormat_BGRA_4444_16u
+    {
         let num_pixels = (import_image.dstWidth * import_image.dstHeight) as usize;
         let mut temp_buf = importer_data.temp_bgra64_buffer.lock().unwrap();
         if temp_buf.len() < num_pixels * 4 {
             temp_buf.resize(num_pixels * 4, 0);
         }
-        
-        let sws_ctx = sws_getContext(
-            (*target_frame).width,
-            (*target_frame).height,
-            (*target_frame).format,
-            import_image.dstWidth,
-            import_image.dstHeight,
-            AV_PIX_FMT_BGRA64LE,
-            SWS_FAST_BILINEAR as i32,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            ptr::null(),
-        );
-        
-        if !sws_ctx.is_null() {
-            let row_elements = (import_image.dstWidth * 4) as usize;
-            let dest_start = temp_buf.as_mut_ptr().add((import_image.dstHeight - 1) as usize * row_elements);
-            let mut dest_data: [*mut u8; 4] = [dest_start as *mut u8, ptr::null_mut(), ptr::null_mut(), ptr::null_mut()];
-            let mut dest_linesize: [i32; 4] = [(-(import_image.dstWidth * 8)), 0, 0, 0];
-            
-            sws_scale(
-                sws_ctx,
-                (*target_frame).data.as_ptr() as *const *const u8,
-                (*target_frame).linesize.as_ptr(),
-                0,
-                (*target_frame).height,
-                dest_data.as_mut_ptr(),
-                dest_linesize.as_mut_ptr(),
-            );
-            sws_freeContext(sws_ctx);
-            
-            let dest_slice = core::slice::from_raw_parts_mut(import_image.pix as *mut f32, num_pixels * 4);
-            crate::plugin::shared::bgra64_to_f32(&temp_buf[..num_pixels * 4], dest_slice);
-            return_error = malNoError as prMALError;
-        }
-    } else if target_pix_fmt == PrPixelFormat_PrPixelFormat_BGRA_4444_16u {
-        let num_pixels = (import_image.dstWidth * import_image.dstHeight) as usize;
-        let mut temp_buf = importer_data.temp_bgra64_buffer.lock().unwrap();
-        if temp_buf.len() < num_pixels * 4 {
-            temp_buf.resize(num_pixels * 4, 0);
-        }
-        
-        let sws_ctx = sws_getContext(
-            (*target_frame).width,
-            (*target_frame).height,
-            (*target_frame).format,
-            import_image.dstWidth,
-            import_image.dstHeight,
-            AV_PIX_FMT_BGRA64LE,
-            SWS_FAST_BILINEAR as i32,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            ptr::null(),
-        );
-        
-        if !sws_ctx.is_null() {
-            let row_elements = (import_image.dstWidth * 4) as usize;
-            let dest_start = temp_buf.as_mut_ptr().add((import_image.dstHeight - 1) as usize * row_elements);
-            let mut dest_data: [*mut u8; 4] = [dest_start as *mut u8, ptr::null_mut(), ptr::null_mut(), ptr::null_mut()];
-            let mut dest_linesize: [i32; 4] = [(-(import_image.dstWidth * 8)), 0, 0, 0];
-            
-            sws_scale(
-                sws_ctx,
-                (*target_frame).data.as_ptr() as *const *const u8,
-                (*target_frame).linesize.as_ptr(),
-                0,
-                (*target_frame).height,
-                dest_data.as_mut_ptr(),
-                dest_linesize.as_mut_ptr(),
-            );
-            sws_freeContext(sws_ctx);
-            
-            let dest_slice = core::slice::from_raw_parts_mut(import_image.pix as *mut u16, num_pixels * 4);
-            crate::plugin::shared::bgra64_to_u16_shift(&temp_buf[..num_pixels * 4], dest_slice);
+
+        let row_elements = (import_image.dstWidth * 4) as usize;
+        let dest_start = temp_buf.as_mut_ptr().add((import_image.dstHeight - 1) as usize * row_elements);
+        let mut dest_data: [*mut u8; 4] = [dest_start as *mut u8, ptr::null_mut(), ptr::null_mut(), ptr::null_mut()];
+        let mut dest_linesize: [i32; 4] = [-(import_image.dstWidth * 8), 0, 0, 0];
+
+        if run_sws(AV_PIX_FMT_BGRA64LE, &mut dest_data, &mut dest_linesize) {
+            if target_pix_fmt == PrPixelFormat_PrPixelFormat_BGRA_4444_32f {
+                let dest_slice = core::slice::from_raw_parts_mut(import_image.pix as *mut f32, num_pixels * 4);
+                crate::plugin::shared::bgra64_to_f32(&temp_buf[..num_pixels * 4], dest_slice);
+            } else {
+                let dest_slice = core::slice::from_raw_parts_mut(import_image.pix as *mut u16, num_pixels * 4);
+                crate::plugin::shared::bgra64_to_u16_shift(&temp_buf[..num_pixels * 4], dest_slice);
+            }
             return_error = malNoError as prMALError;
         }
     } else {
-        let sws_ctx = sws_getContext(
-            (*target_frame).width,
-            (*target_frame).height,
-            (*target_frame).format,
-            import_image.dstWidth,
-            import_image.dstHeight,
-            AV_PIX_FMT_BGRA,
-            SWS_FAST_BILINEAR as i32,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            ptr::null(),
-        );
+        let dest_start = (import_image.pix as *mut u8).add(((import_image.dstHeight - 1) * import_image.rowbytes) as usize);
+        let mut dest_data: [*mut u8; 4] = [dest_start, ptr::null_mut(), ptr::null_mut(), ptr::null_mut()];
+        let mut dest_linesize: [i32; 4] = [-import_image.rowbytes, 0, 0, 0];
 
-        if !sws_ctx.is_null() {
-            let dest_start = (import_image.pix as *mut u8).add(((import_image.dstHeight - 1) * import_image.rowbytes) as usize);
-            let mut dest_data: [*mut u8; 4] = [dest_start, ptr::null_mut(), ptr::null_mut(), ptr::null_mut()];
-            let mut dest_linesize: [i32; 4] = [-import_image.rowbytes, 0, 0, 0];
-
-            sws_scale(
-                sws_ctx,
-                (*target_frame).data.as_ptr() as *const *const u8,
-                (*target_frame).linesize.as_ptr(),
-                0,
-                (*target_frame).height,
-                dest_data.as_mut_ptr(),
-                dest_linesize.as_mut_ptr(),
-            );
-            sws_freeContext(sws_ctx);
-            
+        if run_sws(AV_PIX_FMT_BGRA, &mut dest_data, &mut dest_linesize) {
             return_error = malNoError as prMALError;
         }
     }
